@@ -824,13 +824,13 @@ function ccrt() {
 	let time = rollbase.Dice(10)
 	let PP = rollbase.Dice(100) - 1
 	if (rollcc <= 7) {
-		result = cocmadnessrt[rollcc] + '\n症狀持續' + time + '輪數';
+		result = cocmadnessrt[rollcc] + '\n症狀持續' + time + '輪數' + '\n但战斗还会继续...';
 	} else
 		if (rollcc == 8) {
-			result = cocmadnessrt[rollcc] + '\n症狀持續' + time + '輪數' + ' \n' + cocManias[PP];
+			result = cocmadnessrt[rollcc] + '\n症狀持續' + time + '輪數' + ' \n' + cocManias[PP]+ '\n但战斗还会继续...';
 		} else
 			if (rollcc == 9) {
-				result = cocmadnessrt[rollcc] + '\n症狀持續' + time + '輪數' + ' \n' + cocPhobias[PP];
+				result = cocmadnessrt[rollcc] + '\n症狀持續' + time + '輪數' + ' \n' + cocPhobias[PP]+ '\n但战斗还会继续...';
 			}
 	return result;
 }

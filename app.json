@@ -19,11 +19,11 @@
 		},
 		"DISCORD_CHANNEL_KEYWORD": {
 			"description": "Discord Bot的啓動語 如 !trpg 可留空",
-			"required": false
+			"required": true
 		},
 		"DISCORD_CHANNEL_SECRET": {
 			"description": "「Token」 ",
-			"required": false
+			"required": true
 		},
 		"TELEGRAM_CHANNEL_KEYWORD": {
 			"description": "Telegram Bot的啓動語 如 !trpg 可留空",
@@ -35,7 +35,7 @@
 		},
 		"mongoURL": {
 			"description": "「mLab 的KEY」 ",
-			"required": true
+			"required": false
 		}
 	}
 }

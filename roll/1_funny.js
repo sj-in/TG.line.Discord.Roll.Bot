@@ -1,3 +1,5 @@
+import fetch from "node-fetch";
+
 "use strict";
 var rollbase = require('./rollbase.js');
 var variables = {};

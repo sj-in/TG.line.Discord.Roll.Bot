@@ -1,4 +1,5 @@
 "use strict";
+var rollbase = require('../roll/rollbase.js');
 exports.analytics = require('./analytics');
 const channelKeyword = process.env.DISCORD_CHANNEL_KEYWORD || "";
 const channelSecret = process.env.DISCORD_CHANNEL_SECRET;

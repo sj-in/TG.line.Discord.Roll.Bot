@@ -2,7 +2,7 @@
     "joinMessage": [
         "欢迎光临。我的占卜很准的。",
         "——————————————————————————————————————",
-        "🤖感谢你添加了手冢海之。这是基于“HKTRPG 骰子機械人”（https://github.com/hktrpg/TG.line.Discord.Roll.Bot）制作的bot。",
+        "🤖感谢你添加了手冢海之。这是基于“HKTRPG 骰子機械人”制作的bot。（https://github.com/hktrpg/TG.line.Discord.Roll.Bot）",
         "",
         "👾HKTRPG本來是TRPG專用的機械人，但經過開發已經擁有大量娛樂和生活功能",
         "",
@@ -29,7 +29,7 @@
     "firstTimeUseMessage": [
         "手冢海之，是个流动占卜师。现在借宿在花鸡，也做做服务生的工作。请多关照。",
         "——————————————————————————————————————",
-        "感谢使用手冢海之。这是基于“HKTRPG 骰子機械人”（https://github.com/hktrpg/TG.line.Discord.Roll.Bot）制作的bot。",
+        "感谢使用手冢海之。这是基于“HKTRPG 骰子機械人”制作的bot。（https://github.com/hktrpg/TG.line.Discord.Roll.Bot）",
         "👾HKTRPG本來是TRPG專用的機械人，但經過開發已經擁有大量娛樂和生活功能",
         "",
         "🙋輸入 bothelp 可以得到詳細的功能列表。",

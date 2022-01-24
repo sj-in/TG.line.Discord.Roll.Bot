@@ -519,17 +519,17 @@ async function nonDice(message) {
 client.on('ready', async () => {
 	console.log(`Logged in as ${client.user.tag}!`);
 	if (shardids !== 0) return;
-	client.user.setActivity('🌼bothelp | hktrpg.com🍎');
+	client.user.setActivity('三枚硬币');
 
 	var switchSetActivity = 0;
 
 	setInterval(async () => {
 		switch (switchSetActivity % 2) {
 			case 1:
-				client.user.setActivity('🌼bothelp | hktrpg.com🍎');
+				client.user.setActivity('三枚硬币');
 				break;
 			default:
-				client.user.setActivity(await count2());
+				client.user.setActivity(await activity());
 				break;
 		}
 		switchSetActivity = (switchSetActivity % 2) ? 2 : 3;
@@ -590,6 +590,14 @@ async function count2() {
 			return '🌼bothelp | hktrpg.com🍎';
 		});
 }
+
+async function activity(){
+	const rplyArr = ['塔罗牌','Copy Vent','跟踪秋山莲','火柴','塔罗牌，抽到了塔','跟踪秋山莲，被发现了'];
+	return rplyArr[rollbase.Dice(rplyArr.length) - 1]
+}
+	
+
+	
 
 // handle the error event
 process.on('unhandledRejection', error => {

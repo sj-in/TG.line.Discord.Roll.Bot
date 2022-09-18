@@ -9,24 +9,25 @@ var trpgDatabasefunction = {};
 records.get('trpgDatabase', (msgs) => {
     trpgDatabasefunction.trpgDatabasefunction = msgs
 });
+const checkTools = require('../modules/check.js');
 records.get('trpgDatabaseAllgroup', (msgs) => {
     trpgDatabasefunction.trpgDatabaseAllgroup = msgs
 });
 const VIP = require('../modules/veryImportantPerson');
-const limitArr = [30, 200, 200, 300, 300, 300, 300, 300];
-var gameName = function () {
-    return '(公測中)資料庫功能 .db(p) (add del show 自定關鍵字)'
+const FUNCTION_LIMIT = [30, 200, 200, 300, 300, 300, 300, 300];
+const gameName = function () {
+    return '【資料庫功能】 .db(p) (add del show 自定關鍵字)'
 }
-var gameType = function () {
+const gameType = function () {
     return 'funny:trpgDatabase:hktrpg'
 }
-var prefixs = function () {
+const prefixs = function () {
     return [{
         first: /(^[.]db(p|)$)/ig,
         second: null
     }]
 }
-var getHelpMessage = async function () {
+const getHelpMessage = async function () {
     return `【資料庫功能】
 這是根據關鍵字來顯示數據的,
 例如輸入 .db add 九大陣營 守序善良 (...太長省略) 中立邪惡 混亂邪惡 
@@ -54,12 +55,12 @@ P.S.如果沒立即生效 用.db show 刷新一下
 * {my.level}    <---顯示擲骰者等級
 `
 }
-var initialize = function () {
+const initialize = function () {
     return trpgDatabasefunction;
 }
 exports.z_Level_system = require('./z_Level_system');
 // eslint-disable-next-line no-unused-vars
-var rollDiceCommand = async function ({
+const rollDiceCommand = async function ({
     inputStr,
     mainMsg,
     groupid,
@@ -79,7 +80,7 @@ var rollDiceCommand = async function ({
     let tempshow = 0;
     let temp2 = 0;
     let lv;
-    let limit = limitArr[0];
+    let limit = FUNCTION_LIMIT[0];
     switch (true) {
         case /^help$/i.test(mainMsg[1]) || !mainMsg[1]:
             rply.text = await this.getHelpMessage();
@@ -87,7 +88,7 @@ var rollDiceCommand = async function ({
             return rply;
 
         // .DB(0) ADD(1) TOPIC(2) CONTACT(3)
-        case /(^[.]db$)/i.test(mainMsg[0]) && /^add$/i.test(mainMsg[1]) && /^(?!(add|del|show)$)/ig.test(mainMsg[2]):
+        case /(^[.]db$)/i.test(mainMsg[0]) && /^add$/i.test(mainMsg[1]) && /^(?!(add|del|show)$)/ig.test(mainMsg[2]): {
             //增加資料庫
             //檢查有沒有重覆
             //if (!mainMsg[2]) return;
@@ -96,105 +97,101 @@ var rollDiceCommand = async function ({
                        只限四張角色卡.
                        使用VIPCHECK
                        */
-            lv = await VIP.viplevelCheckGroup(groupid);
-            limit = limitArr[lv];
+            if (!mainMsg[2]) rply.text += ' 沒有輸入標題。\n\n'
+            if (!mainMsg[3]) rply.text += ' 沒有輸入內容。\n\n'
+            if (rply.text += checkTools.permissionErrMsg({
+                flag : checkTools.flag.ChkChannelManager,
+                gid : groupid,
+                role : userrole
+            })) {
+                return rply;
+            }
 
-            if (groupid && userrole >= 1 && mainMsg[3]) {
-                if (trpgDatabasefunction.trpgDatabasefunction)
-                    for (let i = 0; i < trpgDatabasefunction.trpgDatabasefunction.length; i++) {
-                        if (trpgDatabasefunction.trpgDatabasefunction[i].groupid == groupid) {
-                            if (trpgDatabasefunction.trpgDatabasefunction[0] && trpgDatabasefunction.trpgDatabasefunction[0].trpgDatabasefunction[0]) {
-                                if (trpgDatabasefunction.trpgDatabasefunction[i].trpgDatabasefunction.length >= limit) {
-                                    rply.text = '關鍵字上限' + limit + '個\n支援及解鎖上限 https://www.patreon.com/HKTRPG\n或自組服務器\n源代碼  http://bit.ly/HKTRPG_GITHUB';
-                                    return rply;
-                                }
-                                for (let a = 0; a < trpgDatabasefunction.trpgDatabasefunction[i].trpgDatabasefunction.length; a++) {
-                                    if (trpgDatabasefunction.trpgDatabasefunction[i].trpgDatabasefunction[a].topic == mainMsg[2]) {
-                                        checkifsamename = 1
-                                    }
+            lv = await VIP.viplevelCheckGroup(groupid);
+            limit = FUNCTION_LIMIT[lv];
+
+            if (trpgDatabasefunction.trpgDatabasefunction)
+                for (let i = 0; i < trpgDatabasefunction.trpgDatabasefunction.length; i++) {
+                    if (trpgDatabasefunction.trpgDatabasefunction[i].groupid == groupid) {
+                        if (trpgDatabasefunction.trpgDatabasefunction[0] && trpgDatabasefunction.trpgDatabasefunction[0].trpgDatabasefunction[0]) {
+                            if (trpgDatabasefunction.trpgDatabasefunction[i].trpgDatabasefunction.length >= limit) {
+                                rply.text = '關鍵字上限' + limit + '個\n支援及解鎖上限 https://www.patreon.com/HKTRPG\n';
+                                return rply;
+                            }
+                            for (let a = 0; a < trpgDatabasefunction.trpgDatabasefunction[i].trpgDatabasefunction.length; a++) {
+                                if (trpgDatabasefunction.trpgDatabasefunction[i].trpgDatabasefunction[a].topic == mainMsg[2]) {
+                                    checkifsamename = 1
                                 }
                             }
                         }
                     }
-                let temp = {
-                    groupid: groupid,
-                    trpgDatabasefunction: [{
-                        topic: mainMsg[2],
-                        contact: inputStr.replace(/\.db\s+add\s+/i, '').replace(mainMsg[2], '').replace(/^\s+/, '')
-                    }]
                 }
-                if (checkifsamename == 0) {
-                    records.pushtrpgDatabasefunction('trpgDatabase', temp, () => {
-                        records.get('trpgDatabase', (msgs) => {
-                            trpgDatabasefunction.trpgDatabasefunction = msgs
-                            // console.log(rply);
-                        })
-
-                    })
-                    rply.text = '新增成功: ' + mainMsg[2]
-                } else rply.text = '新增失敗. 重複標題'
-            } else {
-                rply.text = '新增失敗.'
-                if (!mainMsg[2])
-                    rply.text += ' 沒有標題.'
-                if (!mainMsg[3])
-                    rply.text += ' 沒有內容'
-                if (!groupid)
-                    rply.text += ' 此功能必須在群組中使用.'
-                if (groupid && userrole < 1)
-                    rply.text += ' 只有GM以上才可新增.'
+            let temp = {
+                groupid: groupid,
+                trpgDatabasefunction: [{
+                    topic: mainMsg[2],
+                    contact: inputStr.replace(/\.db\s+add\s+/i, '').replace(mainMsg[2], '').replace(/^\s+/, '')
+                }]
             }
-            return rply;
+            if (checkifsamename == 0) {
+                records.pushtrpgDatabasefunction('trpgDatabase', temp, () => {
+                    records.get('trpgDatabase', (msgs) => {
+                        trpgDatabasefunction.trpgDatabasefunction = msgs
+                    })
 
+                })
+                rply.text = '新增成功: ' + mainMsg[2]
+            } else rply.text = '新增失敗. 重複標題'
+
+            return rply;
+        }
         case /(^[.]db$)/i.test(mainMsg[0]) && /^del$/i.test(mainMsg[1]) && /^all$/i.test(mainMsg[2]):
             //刪除資料庫
-            if (groupid && mainMsg[2] && trpgDatabasefunction.trpgDatabasefunction && userrole >= 2) {
-                for (let i = 0; i < trpgDatabasefunction.trpgDatabasefunction.length; i++) {
-                    if (trpgDatabasefunction.trpgDatabasefunction[i].groupid == groupid) {
-                        let temp = trpgDatabasefunction.trpgDatabasefunction[i]
-                        temp.trpgDatabasefunction = []
-                        records.settrpgDatabasefunction('trpgDatabase', temp, () => {
-                            records.get('trpgDatabase', (msgs) => {
-                                trpgDatabasefunction.trpgDatabasefunction = msgs
-                            })
-                        })
-                        rply.text = '刪除所有關鍵字'
-                    }
-                }
-            } else {
-                rply.text = '刪除失敗.'
-                if (!groupid)
-                    rply.text += '此功能必須在群組中使用. '
-                if (groupid && userrole < 1)
-                    rply.text += '只有GM以上才可刪除. '
+            if (rply.text = checkTools.permissionErrMsg({
+                flag : checkTools.flag.ChkChannelManager,
+                gid : groupid,
+                role : userrole
+            })) {
+                return rply;
             }
 
+            for (let i = 0; i < trpgDatabasefunction.trpgDatabasefunction.length; i++) {
+                if (trpgDatabasefunction.trpgDatabasefunction[i].groupid == groupid) {
+                    let temp = trpgDatabasefunction.trpgDatabasefunction[i]
+                    temp.trpgDatabasefunction = []
+                    records.settrpgDatabasefunction('trpgDatabase', temp, () => {
+                        records.get('trpgDatabase', (msgs) => {
+                            trpgDatabasefunction.trpgDatabasefunction = msgs
+                        })
+                    })
+                    rply.text = '刪除所有關鍵字'
+                }
+            }
             return rply;
         case /(^[.]db$)/i.test(mainMsg[0]) && /^del$/i.test(mainMsg[1]) && /^\d+$/i.test(mainMsg[2]):
             //刪除資料庫
-            if (groupid && mainMsg[2] && trpgDatabasefunction.trpgDatabasefunction && userrole >= 1) {
-                for (let i = 0; i < trpgDatabasefunction.trpgDatabasefunction.length; i++) {
-                    if (trpgDatabasefunction.trpgDatabasefunction[i].groupid == groupid && mainMsg[2] < trpgDatabasefunction.trpgDatabasefunction[i].trpgDatabasefunction.length && mainMsg[2] >= 0) {
-                        let temp = trpgDatabasefunction.trpgDatabasefunction[i]
-                        temp.trpgDatabasefunction.splice(mainMsg[2], 1)
-                        //console.log('trpgDatabasefunction.trpgDatabasefunction: ', temp)
-                        records.settrpgDatabasefunction('trpgDatabase', temp, () => {
-                            records.get('trpgDatabase', (msgs) => {
-                                trpgDatabasefunction.trpgDatabasefunction = msgs
-                            })
-                        })
-                    }
-                    rply.text = '刪除成功: ' + mainMsg[2]
-                }
-            } else {
-                rply.text = '刪除失敗.'
-                if (!mainMsg[2])
-                    rply.text += '沒有關鍵字. '
-                if (!groupid)
-                    rply.text += '此功能必須在群組中使用. '
-                if (groupid && userrole < 1)
-                    rply.text += '只有GM以上才可刪除. '
+            if (!mainMsg[2]) rply.text += '沒有關鍵字. \n\n'
+            if (rply.text += checkTools.permissionErrMsg({
+                flag : checkTools.flag.ChkChannelManager,
+                gid : groupid,
+                role : userrole
+            })) {
+                return rply;
             }
+
+            for (let i = 0; i < trpgDatabasefunction.trpgDatabasefunction.length; i++) {
+                if (trpgDatabasefunction.trpgDatabasefunction[i].groupid == groupid && mainMsg[2] < trpgDatabasefunction.trpgDatabasefunction[i].trpgDatabasefunction.length && mainMsg[2] >= 0) {
+                    let temp = trpgDatabasefunction.trpgDatabasefunction[i]
+                    temp.trpgDatabasefunction.splice(mainMsg[2], 1)
+                    records.settrpgDatabasefunction('trpgDatabase', temp, () => {
+                        records.get('trpgDatabase', (msgs) => {
+                            trpgDatabasefunction.trpgDatabasefunction = msgs
+                        })
+                    })
+                }
+                rply.text = '刪除成功: ' + mainMsg[2]
+            }
+
             return rply;
 
         case /(^[.]db$)/i.test(mainMsg[0]) && /^show$/i.test(mainMsg[1]):
@@ -202,7 +199,6 @@ var rollDiceCommand = async function ({
             records.get('trpgDatabase', (msgs) => {
                 trpgDatabasefunction.trpgDatabasefunction = msgs
             })
-            //console.log(trpgDatabasefunction.trpgDatabasefunction)
             if (groupid) {
                 let temp = 0;
                 if (trpgDatabasefunction.trpgDatabasefunction)
@@ -228,14 +224,11 @@ var rollDiceCommand = async function ({
             //let times = /^[.]db/.exec(mainMsg[0])[1] || 1
             //if (times > 30) times = 30;
             //if (times < 1) times = 1
-            //console.log(times)
             if (groupid) {
-                //    console.log(mainMsg[1])
                 let temp = 0;
                 if (trpgDatabasefunction.trpgDatabasefunction && mainMsg[1])
                     for (let i = 0; i < trpgDatabasefunction.trpgDatabasefunction.length; i++) {
                         if (trpgDatabasefunction.trpgDatabasefunction[i].groupid == groupid) {
-                            // console.log(trpgDatabasefunction.trpgDatabasefunction[i])
                             //rply.text += '資料庫列表:'
                             for (let a = 0; a < trpgDatabasefunction.trpgDatabasefunction[i].trpgDatabasefunction.length; a++) {
                                 if (trpgDatabasefunction.trpgDatabasefunction[i].trpgDatabasefunction[a].topic.toLowerCase() == mainMsg[1].toLowerCase()) {
@@ -427,7 +420,7 @@ async function findGp(groupid) {
     //1. 檢查GROUP ID 有沒有開啓CONFIG 功能 1
     let gpInfo = await schema.trpgLevelSystem.findOne({
         groupid: groupid
-    });
+    }).catch(error => console.error('db #430 mongoDB error: ', error.name, error.reson));
     if (!gpInfo || gpInfo.SwitchV2 != 1) return;
     // userInfo.name = displaynameDiscord || displayname || '無名'
     return gpInfo;
@@ -440,7 +433,7 @@ async function findGpMember(groupid) {
     //1. 檢查GROUP ID 有沒有開啓CONFIG 功能 1
     let gpInfo = await schema.trpgLevelSystemMember.find({
         groupid: groupid
-    });
+    }).catch(error => console.error('db #443 mongoDB error: ', error.name, error.reson));
     // userInfo.name = displaynameDiscord || displayname || '無名'
     return gpInfo;
     //6 / 7 * LVL * (2 * LVL * LVL + 30 * LVL + 100)
@@ -451,7 +444,7 @@ async function findUser(groupid, userid) {
     let userInfo = await schema.trpgLevelSystemMember.findOne({
         groupid: groupid,
         userid: userid
-    });
+    }).catch(error => console.error('db #454 mongoDB error: ', error.name, error.reson));
     // userInfo.name = displaynameDiscord || displayname || '無名'
     return userInfo;
     //6 / 7 * LVL * (2 * LVL * LVL + 30 * LVL + 100)

@@ -6,22 +6,30 @@ const wiki = require('wikijs').default;
 const rollbase = require('./rollbase.js');
 const translate = require('@vitalets/google-translate-api');
 var variables = {};
-var gameName = function () {
-	return 'Wiki查詢/圖片搜索 .wiki .image .tran'
+const schema = require('../modules/schema.js');
+const VIP = require('../modules/veryImportantPerson');
+const translateChannel = require('../modules/translate');
+const FUNCTION_LIMIT = [0, 2, 4, 6, 8, 9, 9, 9];
+const opt = {
+	upsert: true,
+	runValidators: true
+}
+const gameName = function () {
+	return '【Wiki查詢/圖片搜索】 .wiki .image .tran'
 }
 
-var gameType = function () {
+const gameType = function () {
 	return 'funny:Wiki:hktrpg'
 }
-var prefixs = function () {
+const prefixs = function () {
 	return [{
-		first: /^[.]wiki$|^[.]tran$|^[.]tran[.]\S+$|^[.]image$|^[.]imagee$/i,
+		first: /^[.]wiki$|^[.]tran$|^[.]tran[.]\S+$|^[.]image$|^[.]imagee$|^[.]translate$/i,
 		second: null
 	}]
 
 }
 
-var getHelpMessage = async function () {
+const getHelpMessage = async function () {
 	return `【Wiki查詢/即時翻譯】.wiki .image .tran .tran.(目標語言)
 Wiki功能		： .wiki (條目)  
 EG: .wiki BATMAN  
@@ -34,6 +42,10 @@ EG: .wiki BATMAN
 預設翻譯成正體中文 
 EG: .tran BATMAN 
 
+VIP功能:同步式頻道傳譯功能
+.translate on
+.translate off
+
 可翻譯成其他語言 ： .tran.(語系) (內容)
 EG: .tran.ja BATMAN  .tran.日 BATMAN
 常用語言代碼: 英=en, 簡=zh-cn, 德=de, 日=ja
@@ -42,13 +54,17 @@ EG: .tran.ja BATMAN  .tran.日 BATMAN
 注: 翻譯使用Google Translate
 `
 }
-var initialize = function () {
+const initialize = function () {
 	return variables;
 }
 
-var rollDiceCommand = async function ({
+const rollDiceCommand = async function ({
 	inputStr,
-	mainMsg
+	mainMsg,
+	groupid,
+	channelid,
+	botname,
+	userrole
 }) {
 	let rply = {
 		default: 'on',
@@ -63,13 +79,13 @@ var rollDiceCommand = async function ({
 		case /^help$/i.test(mainMsg[1]) || !mainMsg[1]:
 			rply.text = await this.getHelpMessage();
 			return rply;
-		case /\S+/.test(mainMsg[1]) && /[.]wiki/.test(mainMsg[0]):
+		case /\S+/.test(mainMsg[1]) && /[.]wiki/i.test(mainMsg[0]):
 			rply.text = await wiki({
 				apiUrl: 'https://zh.wikipedia.org/w/api.php'
 			}).page(mainMsg[1].toLowerCase())
 				.then(async page => {
 					return chineseConv.tify(await page.summary())
-				}) //console.log('case: ', rply)
+				})
 				.catch(error => {
 					if (error == 'Error: No article found')
 						return '沒有此條目'
@@ -78,7 +94,7 @@ var rollDiceCommand = async function ({
 					}
 				})
 			return rply;
-		case /\S+/.test(mainMsg[1]) && /^[.]tran$/.test(mainMsg[0]):
+		case /\S+/.test(mainMsg[1]) && /^[.]tran$/i.test(mainMsg[0]):
 			rply.text = await translate(inputStr.replace(mainMsg[0], ""), {
 				to: 'zh-TW'
 			}).then(res => {
@@ -87,36 +103,83 @@ var rollDiceCommand = async function ({
 				return err.message;
 			});
 			return rply;
+		/**
+	case /^[.]translate$/i.test(mainMsg[0]): {
+		if (botname !== "Discord") {
+			rply.text = '這是Discord 限定功能';
+			return rply;
+		}
+		if (userrole < 3) {
+			rply.text = '本功能只能由admin 啓動開關';
+			return rply;
+		}
+		if (/^on$/i.test(mainMsg[1])) {
+			let check = await schema.translateChannel.find({
+				groupid: groupid,
+				switch: true
+			}).countDocuments().catch(error => console.error('translate #111 mongoDB error: ', error.name, error.reson));
+			let gpLv = await VIP.viplevelCheckGroup(groupid);
+			let limit = FUNCTION_LIMIT[gpLv];
+			if (check.length >= limit) {
+				rply.text = '此群組翻譯上限為' + limit + '條頻道' + '\n支援及解鎖上限 https://www.patreon.com/HKTRPG\n';
+				return rply
+			}
+			await schema.translateChannel.findOneAndUpdate({
+				groupid: groupid,
+				channelid: channelid
+			}, {
+				switch: true
+			}, opt);
+			translateChannel.translateSwitchOn(channelid)
+			rply.text = '此頻道已開啓翻譯功能。'
+			return rply
+		}
+		if (/^off$/i.test(mainMsg[1])) {
+			await schema.translateChannel.findOneAndUpdate({
+				groupid: groupid,
+				channelid: channelid
+			}, {
+				switch: false
+			}, opt);
+			translateChannel.translateSwitchOff(channelid)
+			rply.text = '此頻道已關閉翻譯功能。'
+			return rply
+		}
+
+		rply.text = '沒有正確指令，需要輸入.translate on 或.translate off 去啓動/關閉翻譯功能'
+
+		return rply
+	}
+	 */
 		case /\S+/.test(mainMsg[1]) && /^[.]tran[.]\S+$/.test(mainMsg[0]):
 			lang = /.tran.(\S+)/;
 			test = mainMsg[0].match(lang)
 			rply.text = await translate(inputStr.replace(mainMsg[0], ""), {
-				to: test[1].replace("簡中", "zh-CN").replace("簡體", "zh-CN").replace(/zh-cn/ig, "zh-CN").replace("英", "en").replace("簡", "zh-CN").replace("德", "de").replace("日", "ja")
+				to: test[1].replace(/簡體|簡中|簡|zh-cn/, "zh-CN").replace(/英文|英語|英/, "en").replace(/德文|德語|德/, "de").replace(/日文|日語|日/, "ja")
 			}).then(res => {
-				//console.log(res.from.language.iso);
 				return res.text
 			}).catch(err => {
-				console.error(err.message)
+				console.error('tran error:', err.message)
 				return err.message + "\n常用語言代碼: 英=en, 簡=zh-cn, 德=de, 日=ja\n例子: .tran.英\n.tran.日\n.tran.de";
 			});
 			return rply;
-		case /\S+/.test(mainMsg[1]) && /^[.]image$/.test(mainMsg[0]):
+		case /\S+/.test(mainMsg[1]) && /^[.]image$/i.test(mainMsg[0]):
 			try {
 				rply.text = await searchImage(inputStr, mainMsg, true)
 				rply.type = 'image'
 			} catch (error) {
-				console.log('.image error')
+				console.error('.image error #108')
 				return rply;
 			}
 			return rply;
 
-		case /\S+/.test(mainMsg[1]) && /^[.]imagee$/.test(mainMsg[0]):
+		case /\S+/.test(mainMsg[1]) && /^[.]imagee$/i.test(mainMsg[0]):
 			//成人版
 			try {
 				rply.text = await searchImage(inputStr, mainMsg, false)
 				rply.type = 'image'
 			} catch (error) {
-				console.log('.image error')
+				console.error('.image error #119')
 				return rply;
 			}
 			return rply;
@@ -147,7 +210,7 @@ async function searchImage(inputStr, mainMsg, safe) {
 			}
 
 		}).catch(err => {
-			console.error(err)
+			console.error('duckImage error: ', err & err.respone && err.respone.statusText)
 		})
 }
 

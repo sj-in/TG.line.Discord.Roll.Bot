@@ -6,8 +6,6 @@ var Dice = [],
 	funny = [],
 	help = [],
 	link = [];
-const url = "https://www.hktrpg.com/tool/notes.json"
-const fetch = require('node-fetch');
 const start = async () => {
 	await require('fs').readdirSync(__dirname).forEach(async function (file) {
 		try {
@@ -21,7 +19,7 @@ const start = async () => {
 			}
 
 		} catch (error) {
-			console.error(error)
+			console.error('help.js error: ', error)
 		}
 	})
 
@@ -64,21 +62,21 @@ if (process.env.HEROKU_RELEASE_VERSION)
 var version = "";
 
 
-var gameName = function () {
+const gameName = function () {
 	return '骰子機器人HKTRPG說明';
 }
 
-var gameType = function () {
+const gameType = function () {
 	return 'bothelp:hktrpg'
 }
-var prefixs = function () {
+const prefixs = function () {
 	return [{
 		first: /^bothelp$/i,
 		second: null
 	}]
 
 }
-var getHelpMessage = async function () {
+const getHelpMessage = async function () {
 	return `【暗骰功能】
 在指令前輸入dr 結果會私訊你
 ddr dddr 可以私訊已設定的群組GM, 詳情可打.drgm查詢
@@ -91,14 +89,26 @@ ddr dddr 可以私訊已設定的群組GM, 詳情可打.drgm查詢
 .5 3D6 ：	分別骰出5次3d6 最多30次
 ((2d6+1)*2)-5/2>=10 支援括號加減乘除及大於小於(>,<,>=,<=)計算
 支援kh|kl|dh|dl，k keep保留，d drop 放棄，h highest最高，l lowest最低
-如3d6kh 保留最大的1粒骰，3d6dl2 放棄最小的2粒骰`
+如3d6kh 保留最大的1粒骰，3d6dl2 放棄最小的2粒骰
+
+【RPG Dice Roller擲骰】.rr
+RPG Dice Roller 是英語系統常用擲骰功能
+Foundry VTT也是使用它
+和基本擲骰不同
+有更多仔細的擲骰命令，如1d10r1 5d10!k2
+
+
+擲骰指令請看
+https://dice-roller.github.io/documentation/guide/notation/
+ 
+ `
 }
-var initialize = function () {
+const initialize = function () {
 	return variables;
 }
 
 
-var rollDiceCommand = async function ({
+const rollDiceCommand = async function ({
 	mainMsg
 }) {
 	let rply = {
@@ -120,7 +130,7 @@ HKTRPG是在Discord, Line, Telegram, Whatsapp和網頁上都可以使用的骰�
 -------
 請問有什麼可以幫助你?
 請輸入你想查詢的項目名字.
-或到 (https://hktrpg.github.io/TG.line.Discord.Roll.Bot/) 觀看詳細使用說明.
+或到 (https://bothelp.hktrpg.com/) 觀看詳細使用說明.
 -------
 bothelp ver		- 查詢詳細版本及公告(${ver})
 bothelp Base	- 查詢trpg 基本擲骰指令🎲
@@ -129,45 +139,26 @@ bothelp Tool	- 查詢trpg 輔助工具🧰
 bothelp admin	- 查詢系統工具⚙️
 bothelp funny	- 查詢趣味功能😂
 bothelp link	- 查詢HKTRPG 不同平台連結🔗
+bothelp privacy	- 查詢HKTRPG 的隱私權條款🔒
 bothelp about	- 查詢HKTRPG 歷史📜
 --------
 🗂️HKTRPG 作品集, (https://hktrpg.github.io/TG.line.Discord.Roll.Bot/PORTFOLIOP)
-ℹ️如果你需要幫助, 加入我們的支援頻道, (https://discord.gg/vx4kcm7)
+ℹ️如果你需要幫助, 加入我們的支援頻道, (https://support.hktrpg.com)
 ☕贊助伺服器運行及開放VIP資源, (https://www.patreon.com/HKTRPG)`
+			rply.buttonCreate = ['bothelp ver', 'bothelp Base', 'bothelp Dice', 'bothelp Tool', 'bothelp admin', 'bothelp funny', 'bothelp link', 'bothelp privacy', 'bothelp about']
+
 			return rply;
 		case /^ver$/i.test(mainMsg[1]):
 			rply.text = `${version}
 最近更新: 
 2019/07/21 香港克警合作 黑ICON紀念
 ...前略...
-2021/06/24 🍎
-2021/06/28 更新名人堂, 感謝 陳啟昌, strben,匡匡贊助HKTRPG
-2021/07/01 🌼
-2021/07/03 .admin state 增加顯示數據
-2021/07/08 更新Plurk連接
-2021/07/16 使用Discord js light, 現在有7400群組在使用, 記憶體不夠用了...
-		   更新coc創角, 幼年調查員和PULP版
-2021/07/18 更新Discord說明的方式, 使用Embeds
-2021/09/01 新增作品集
-2021/09/10 新增追逐戰.chase，新增.sc SanCheck功能
-2021/09/18 showMeAtTheWorld
-2021/09/30 新增匯出團錄時，可以去掉不必要的日期標示，Choice 排序功能顯示改良，.CC7build random
-2021/10/09 更新topgg-autoposter，舊版時常CRASH，令HKTRPG出錯
-		   更新了PLURK，令速度提升
- 		   改良CODE，移除了沒用的AWAIT ASYNC，令程式反應更快
-2021/10/20 增加 5B10S：不加總的擲骰，並按大至小排序 - Krymino Lin的意見
-2021/11/01 增加 .x 多重擲骰 如.5 cc 80
-			增加定時發訊功能 .at / .cron
-全部更新可看https://github.com/hktrpg/TG.line.Discord.Roll.Bot/commits/master
+2022/05 https://www.patreon.com/posts/hktrpg-wu-yue-66190934
+2022/04	https://www.patreon.com/posts/hktrpg-4yue-geng-65565589
+2022/03	https://www.patreon.com/posts/3yue-geng-xin-64158733
+2022/02	https://www.patreon.com/posts/2yue-geng-xin-62329216
+2022/01	https://www.patreon.com/posts/hktrpg-1yue-geng-60706957
 `;
-			try {
-				const response = await fetch(url);
-				const json = await response.json();
-				if (json.news)
-					rply.text += json.news;
-			} catch (error) {
-				console.error(error);
-			}
 			return rply;
 		case /^BASE/i.test(mainMsg[1]):
 			rply.text = await getHelpMessage();
@@ -213,7 +204,10 @@ HKTRPG來源自 機器鴨霸獸 https://docs.google.com/document/d/1dYnJqF2_QTp9
 				rply.text = await Tool[temp].getHelpMessage();
 			}
 			return rply;
-
+		case /^privacy/i.test(mainMsg[1]): {
+			rply.text = "隱私權聲明\nhttps://bothelp.hktrpg.com/hktrpg-guan-fang-shi-yong-jiao-xue/qi-ta-qing-bao/yin-si-quan-sheng-ming";
+			return rply;
+		}
 		case /^admin/i.test(mainMsg[1]):
 			if (mainMsg[1].match(/^admin$/i)) {
 				rply.text = '輸入 bothelp admin序號 如bothelp admin1 即可看到內容\n'
@@ -258,11 +252,11 @@ HKTRPG來源自 機器鴨霸獸 https://docs.google.com/document/d/1dYnJqF2_QTp9
 
 		case /^link/i.test(mainMsg[1]):
 			rply.text = `TRPG百科 https://www.hktrpg.com/
-意見留言群 https://discord.gg/vx4kcm7
+意見留言群 https://support.hktrpg.com
 			
 邀請HKTRPG 加入
 Line 邀請連結 http://bit.ly/HKTRPG_LINE
-Discord 邀請連結 http://bit.ly/HKTRPG_DISCORD_
+Discord 邀請連結 https://discord.hktrpg.com
 Telegram 邀請連結 http://t.me/hktrpg_bot
 網頁版 邀請連結 https://rollbot.hktrpg.com/
 簡易網上擲骰網頁 https://roll.hktrpg.com/

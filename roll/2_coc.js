@@ -1,31 +1,36 @@
 "use strict";
 const rollbase = require('./rollbase.js');
 const schema = require('../modules/schema.js');
+const checkTools = require('../modules/check.js');
+const checkMongodb = require('../modules/dbWatchdog.js');
 const mathjs = require('mathjs');
-var gameName = function () {
+const gameName = function () {
 	return '【克蘇魯神話】 cc cc(n)1~2 ccb ccrt ccsu .dp .cc7build .cc6build .cc7bg'
 }
-
-var gameType = function () {
+const { SlashCommandBuilder } = require('@discordjs/builders');
+const gameType = function () {
 	return 'Dice:CoC'
 }
-var prefixs = function () {
+const prefixs = function () {
 	return [{
 		first: /(^ccrt$)|(^\.chase$)|(^ccsu$)|(^cc7版創角$)|(^[.]dp$)|(^[.]cc7build$)|(^[.]ccpulpbuild$)|(^[.]cc6build$)|(^[.]cc7bg$)|(^cc6版創角$)|(^cc7版角色背景$)/i,
 		second: null
 	},
 	{
 		first: /(^\.sc$)|(^ccb$)|(^cc$)|(^ccn[1-2]$)|(^cc[1-2]$)|(^成長檢定$)|(^幕間成長$)/i,
-		second: /(^\d+$)|(^help$)/i
+		second: /(^\d+)|(^help$)/i
 	}
 	]
 }
-var getHelpMessage = function () {
+const getHelpMessage = function () {
 	return `【克蘇魯神話】
 coc6版擲骰		： ccb 80 技能小於等於80
 coc7版擲骰		： cc 80 技能小於等於80
 coc7版獎勵骰	： cc(1~2) cc1 80 一粒獎勵骰
 coc7版懲罰骰	： ccn(1~2) ccn2 80 兩粒懲罰骰
+coc7版聯合檢定	： 
+cc 80,40 偵查,鬥毆 cc1 80,40 偵查,鬥毆 ccN1 80,40 偵查,鬥毆
+
 coc7版SanCheck	： .sc (SAN值) (成功)/(失敗)
 eg: .sc 50		.sc 50 1/1d3+1		.sc 50 1d10/1d100
 
@@ -42,8 +47,8 @@ coc6版創角		： 啓動語 .cc6build
 coc7版創角		： 啓動語 .cc7build (歲數7-89)
 coc7版隨機創角	： 啓動語 .cc7build random
 
-coc7 成長或增強檢定： .dp 或 成長檢定 或 幕間成長 (技能%) (名稱)
-例）.DP 50 騎馬 | 成長檢定 45 頭槌 | 幕間成長 40 單車
+coc7 成長或增強檢定： .dp 或 成長檢定 或 幕間成長 (技能%) (名稱) (可以一次輸入多個)
+例）.DP 50 騎乘 80 鬥毆  70 60
 
 coc7版角色背景隨機生成： 啓動語 .cc7bg
 
@@ -61,11 +66,11 @@ coc7版角色背景隨機生成： 啓動語 .cc7bg
 
 `
 }
-var initialize = function () {
+const initialize = function () {
 	return {};
 }
 
-var rollDiceCommand = async function ({
+const rollDiceCommand = async function ({
 	mainMsg,
 	groupid,
 	userid,
@@ -113,12 +118,11 @@ var rollDiceCommand = async function ({
 		}
 		//DevelopmentPhase幕間成長指令開始於此
 		case /^\.dp$/i.test(mainMsg[0]) && /^start$/i.test(mainMsg[1]): {
-			if (!groupid) {
-				rply.text = '本功能只可以在群組中使用'
-				return rply;
-			}
-			if (userrole < 3) {
-				rply.text = '本功能只可以由Admin啓動'
+			if (rply.text = checkTools.permissionErrMsg({
+				flag: checkTools.flag.ChkChannelAdmin,
+				gid: groupid,
+				role: userrole
+			})) {
 				return rply;
 			}
 			rply.text = await dpRecordSwitch({ onOff: true, groupid, channelid });
@@ -126,12 +130,11 @@ var rollDiceCommand = async function ({
 			return rply;
 		}
 		case /^\.dp$/i.test(mainMsg[0]) && /^stop$/i.test(mainMsg[1]): {
-			if (!groupid) {
-				rply.text = '本功能只可以在群組中使用'
-				return rply;
-			}
-			if (userrole < 3) {
-				rply.text = '本功能只可以由Admin關閉'
+			if (rply.text = checkTools.permissionErrMsg({
+				flag: checkTools.flag.ChkChannelAdmin,
+				gid: groupid,
+				role: userrole
+			})) {
 				return rply;
 			}
 			rply.text = await dpRecordSwitch({ onOff: false, groupid, channelid });
@@ -139,14 +142,17 @@ var rollDiceCommand = async function ({
 			break;
 		}
 		case /^\.dp$/i.test(mainMsg[0]) && /^show$/i.test(mainMsg[1]): {
-			if (!groupid) {
-				rply.text = '本功能只可以在群組中使用'
+			if (rply.text = checkTools.permissionErrMsg({
+				flag: checkTools.flag.ChkChannel,
+				gid: groupid
+			})) {
 				return rply;
 			}
+
 			let switchOn = await schema.developmentConductor.findOne({
 				groupID: channelid || groupid,
 				switch: true
-			});
+			}).catch(error => console.error('coc #149 mongoDB error: ', error.name, error.reson));
 			if (!switchOn) {
 				rply.text = '本頻道未開啓CC紀錄功能, 請使用 .dp start 開啓'
 				return rply;
@@ -154,7 +160,7 @@ var rollDiceCommand = async function ({
 			let result = await schema.developmentRollingRecord.find({
 				groupID: channelid || groupid,
 				userID: userid,
-			}).sort({ date: -1 });
+			}).sort({ date: -1 }).catch(error => console.error('coc #157 mongoDB error: ', error.name, error.reson));
 			rply.quotes = true;
 			if (!result || result.length == 0) {
 				rply.text = '未有CC擲骰紀錄';
@@ -214,14 +220,16 @@ var rollDiceCommand = async function ({
 		}
 
 		case /^\.dp$/i.test(mainMsg[0]) && /^showall$/i.test(mainMsg[1]): {
-			if (!groupid) {
-				rply.text = '本功能只可以在群組中使用'
+			if (rply.text = checkTools.permissionErrMsg({
+				flag: checkTools.flag.ChkChannel,
+				gid: groupid,
+			})) {
 				return rply;
 			}
 			let switchOn = await schema.developmentConductor.findOne({
 				groupID: channelid || groupid,
 				switch: true
-			});
+			}).catch(error => console.error('coc #224 mongoDB error: ', error.name, error.reson));
 			if (!switchOn) {
 				rply.text = '本頻道未開啓CC紀錄功能, 請使用 .dp start 開啓'
 				return rply;
@@ -234,7 +242,7 @@ var rollDiceCommand = async function ({
 				}, {
 					skillPerStyle: 'fumble'
 				}]
-			}).sort({ userName: -1 });
+			}).sort({ userName: -1 }).catch(error => console.error('coc #237 mongoDB error: ', error.name, error.reson));
 			rply.quotes = true;
 			let criticalSuccessNfumbleResult = {
 				data: false,
@@ -254,14 +262,17 @@ var rollDiceCommand = async function ({
 		}
 		case /^\.dp$/i.test(mainMsg[0]) && /^auto$/i.test(mainMsg[1]): {
 			rply.quotes = true;
-			if (!groupid) {
-				rply.text = '本功能只可以在群組中使用'
+			if (rply.text = checkTools.permissionErrMsg({
+				flag: checkTools.flag.ChkChannel,
+				gid: groupid,
+			})) {
 				return rply;
 			}
+
 			let switchOn = await schema.developmentConductor.findOne({
 				groupID: channelid || groupid,
 				switch: true
-			});
+			}).catch(error => console.error('coc #264 mongoDB error: ', error.name, error.reson));
 			if (!switchOn) {
 				rply.text = '本頻道未開啓CC紀錄功能, 請使用 .dp start 開啓'
 				return rply;
@@ -271,7 +282,7 @@ var rollDiceCommand = async function ({
 				groupID: channelid || groupid,
 				userID: userid,
 				skillPerStyle: 'normal'
-			}).sort({ date: -1 });
+			}).sort({ date: -1 }).catch(error => console.error('coc #274 mongoDB error: ', error.name, error.reson));
 			if (!result || result.length == 0) {
 				rply.text = '未有CC擲骰紀錄';
 				return rply;
@@ -285,7 +296,7 @@ var rollDiceCommand = async function ({
 				if (target > 95) target = 95;
 				if (skill >= 96 || skill > target) {
 					let improved = rollbase.Dice(10);
-					rply.text += `\n1D100 > ${target} 擲出: ${skill}  →  「${name}」成長成功! 技能增加 ${improved} 點! - ${result[index].date.getMonth() + 1}月${result[index].date.getDate()}日 ${result[index].date.getHours()}:${(result[index].date.getMinutes() < 10) ? '0' + result[index].date.getMinutes() : result[index].date.getMinutes()}`
+					rply.text += `\n1D100 > ${target} 擲出: ${skill}  →  「${name}」成長成功! 技能增加 ${improved} 點，現在是 ${target + improved} 點。- ${result[index].date.getMonth() + 1}月${result[index].date.getDate()}日 ${result[index].date.getHours()}:${(result[index].date.getMinutes() < 10) ? '0' + result[index].date.getMinutes() : result[index].date.getMinutes()}`
 
 					if (confident && ((target + improved) >= 90)) {
 						rply.text += `\n調查員的技能提升到90%以上，他的當前理智值增加${rollbase.Dice(6) + rollbase.Dice(6)}點。`
@@ -299,31 +310,37 @@ var rollDiceCommand = async function ({
 				groupID: channelid || groupid,
 				userID: userid,
 				skillPerStyle: 'normal'
-			})
+			}).catch(error => console.error('coc #302 mongoDB error: ', error.name, error.reson));
 			rply.text += `\n--------
 			成長結束，已清除擲骰紀錄`
 			return rply;
 		}
 		case /^\.dp$/i.test(mainMsg[0]) && /^clear$/i.test(mainMsg[1]): {
-			if (!groupid) {
-				rply.text = '本功能只可以在群組中使用'
+			if (rply.text = checkTools.permissionErrMsg({
+				flag: checkTools.flag.ChkChannel,
+				gid: groupid,
+			})) {
 				return rply;
 			}
+
 			let result = await schema.developmentRollingRecord.deleteMany({
 				groupID: channelid || groupid,
 				userID: userid,
 				skillPerStyle: 'normal'
-			})
+			}).catch(error => console.error('coc #316 mongoDB error: ', error.name, error.reson));
 
 			rply.quotes = true;
 			rply.text = `已清除 ${result.n}項紀錄, 如想大成功大失敗紀錄也清除, 請使用 .dp clearall`
 			return rply;
 		}
 		case /^\.dp$/i.test(mainMsg[0]) && /^clearall$/i.test(mainMsg[1]): {
-			if (!groupid) {
-				rply.text = '本功能只可以在群組中使用'
+			if (rply.text = checkTools.permissionErrMsg({
+				flag: checkTools.flag.ChkChannel,
+				gid: groupid,
+			})) {
 				return rply;
 			}
+
 			let result = await schema.developmentRollingRecord.deleteMany({
 				groupID: channelid || groupid,
 				userID: userid,
@@ -335,34 +352,34 @@ var rollDiceCommand = async function ({
 					skillPerStyle: 'normal'
 				}]
 
-			})
+			}).catch(error => console.error('coc #338 mongoDB error: ', error.name, error.reson));
 			rply.quotes = true;
 			rply.text = `已清除你在本頻道的所有CC擲骰紀錄, 共計${result.n}項`
 			return rply;
 
 		}
-		case ((trigger == '.dp' || trigger == '成長檢定' || trigger == '幕間成長') && mainMsg[1] > 0 && mainMsg[1] <= 1000): {
-			rply.text = DevelopmentPhase(mainMsg[1], mainMsg[2]);
+		case (trigger == '.dp' || trigger == '成長檢定' || trigger == '幕間成長'): {
+			rply.text = DevelopmentPhase(mainMsg);
 			rply.quotes = true;
 			break;
 		}
-		case (trigger == 'cc' && mainMsg[1] <= 1000): {
+		case (trigger == 'cc' && mainMsg[1] !== null): {
 			rply.text = await coc7({ chack: mainMsg[1], text: mainMsg[2], userid, groupid, channelid, userName: tgDisplayname || displaynameDiscord || displayname });
 			break;
 		}
-		case (trigger == 'cc1' && mainMsg[1] <= 1000): {
+		case (trigger == 'cc1' && mainMsg[1] !== null): {
 			rply.text = await coc7bp({ chack: mainMsg[1], text: mainMsg[2], userid, groupid, channelid, bpdiceNum: 1, userName: tgDisplayname || displaynameDiscord || displayname });
 			break;
 		}
-		case (trigger == 'cc2' && mainMsg[1] <= 1000): {
+		case (trigger == 'cc2' && mainMsg[1] !== null): {
 			rply.text = await coc7bp({ chack: mainMsg[1], text: mainMsg[2], userid, groupid, channelid, bpdiceNum: 2, userName: tgDisplayname || displaynameDiscord || displayname });
 			break;
 		}
-		case (trigger == 'ccn1' && mainMsg[1] <= 1000): {
+		case (trigger == 'ccn1' && mainMsg[1] !== null): {
 			rply.text = await coc7bp({ chack: mainMsg[1], text: mainMsg[2], userid, groupid, channelid, bpdiceNum: -1, userName: tgDisplayname || displaynameDiscord || displayname });
 			break;
 		}
-		case (trigger == 'ccn2' && mainMsg[1] <= 1000): {
+		case (trigger == 'ccn2' && mainMsg[1] !== null): {
 			rply.text = await coc7bp({ chack: mainMsg[1], text: mainMsg[2], userid, groupid, channelid, bpdiceNum: -2, userName: tgDisplayname || displaynameDiscord || displayname });
 			break;
 		}
@@ -392,15 +409,139 @@ var rollDiceCommand = async function ({
 	}
 	return rply;
 }
+const discordCommand = [
+	{
+		data: new SlashCommandBuilder()
+			.setName('ccrt')
+			.setDescription('coc7版 即時型瘋狂')
+		,
+		async execute() {
+			return `ccrt`
+		}
+	}, {
+		data: new SlashCommandBuilder()
+			.setName('ccsu')
+			.setDescription('coc7版 總結型瘋狂')
+		,
+		async execute() {
+			return `ccsu`
+		}
+	}, {
+		data: new SlashCommandBuilder()
+			.setName('ccb')
+			.setDescription('coc6版擲骰')
+			.addStringOption(option => option.setName('text').setDescription('目標技能大小及名字').setRequired(true)),
+		async execute(interaction) {
+			const text = interaction.options.getString('text')
+			if (text !== null)
+				return `ccb ${text}`
+		}
+	}, {
+		data: new SlashCommandBuilder()
+			.setName('cc')
+			.setDescription('coc7版擲骰')
+			.addStringOption(option => option.setName('text').setDescription('目標技能大小及名字').setRequired(true))
+			.addStringOption(option =>
+				option.setName('paney')
+					.setDescription('獎勵或懲罰骰')
+					.addChoice('1粒獎勵骰', '1')
+					.addChoice('2粒獎勵骰', '2')
+					.addChoice('1粒懲罰骰', 'n1')
+					.addChoice('2粒懲罰骰', 'n2'))
+		,
+		async execute(interaction) {
+			const text = interaction.options.getString('text')
+			const paney = interaction.options.getString('paney') || '';
 
+			return `cc${paney} ${text}`
+		}
+	}, {
+		data: new SlashCommandBuilder()
+			.setName('sc')
+			.setDescription('coc7版SanCheck')
+			.addStringOption(option => option.setName('text').setDescription('你的San值').setRequired(true))
+			.addStringOption(option => option.setName('success').setDescription('成功扣多少San'))
+			.addStringOption(option => option.setName('failure').setDescription('失敗扣多少San')),
+		async execute(interaction) {
+			const text = interaction.options.getString('text')
+			const success = interaction.options.getString('success')
+			const failure = interaction.options.getString('failure')
+			let ans = `.sc ${text}`
+			if ((success !== null) && (failure !== null)) ans = `${ans} ${success}/${failure}`
+			return ans;
+		}
+	},
+	{
+		data: new SlashCommandBuilder()
+			.setName('build')
+			.setDescription('創角功能')
+			.addSubcommand(subcommand =>
+				subcommand
+					.setName('ccpulpbuild')
+					.setDescription('pulp版創角'))
+			.addSubcommand(subcommand =>
+				subcommand
+					.setName('cc6build')
+					.setDescription('coc6版創角'))
+			.addSubcommand(subcommand =>
+				subcommand
+					.setName('cc7build')
+					.setDescription('coc7版創角').addStringOption(option => option.setName('age').setDescription('可選: (歲數7-89) 如果沒有會使用隨機開角')))
+
+		,
+		async execute(interaction) {
+			const age = interaction.options.getString('age') || '';
+			const subcommand = interaction.options.getSubcommand()
+			if (subcommand !== null)
+				return `.${subcommand} ${age}`
+			return '.cc7build help';
+		}
+	}, {
+		data: new SlashCommandBuilder()
+			.setName('dp')
+			.setDescription('coc7 成長或增強檢定')
+			.addStringOption(option => option.setName('text').setDescription('目標技能大小及名字').setRequired(true)),
+		async execute(interaction) {
+			const text = interaction.options.getString('text')
+			return `.dp ${text}`
+		}
+	}, {
+		data: new SlashCommandBuilder()
+			.setName('dpg')
+			.setDescription('coc7 成長檢定紀錄功能')
+			.addStringOption(option =>
+				option.setName('mode')
+					.setDescription('功能')
+					.addChoice('顯示擲骰紀錄', 'show')
+					.addChoice('顯示全頻道所有大成功大失敗擲骰紀錄', 'showall')
+					.addChoice('開啓紀錄功能', 'start')
+					.addChoice('停止紀錄功能', 'stop')
+					.addChoice('進行自動成長並清除擲骰紀錄', 'auto')
+					.addChoice('清除擲骰紀錄', 'clear')
+					.addChoice('清除擲骰紀錄包括大成功大失敗', 'clearall')
+			),
+		async execute(interaction) {
+			const mode = interaction.options.getString('mode')
+			return `.dp ${mode}`
+		}
+	}, {
+		data: new SlashCommandBuilder()
+			.setName('cc7bg')
+			.setDescription('coc7版角色背景隨機生成'),
+		async execute() {
+			return `.cc7bg`
+		}
+	}
+];
 
 module.exports = {
-	rollDiceCommand: rollDiceCommand,
-	initialize: initialize,
-	getHelpMessage: getHelpMessage,
-	prefixs: prefixs,
-	gameType: gameType,
-	gameName: gameName
+	rollDiceCommand,
+	initialize,
+	getHelpMessage,
+	prefixs,
+	gameType,
+	gameName,
+	discordCommand
 };
 
 
@@ -670,20 +811,24 @@ async function dpRecordSwitch({ onOff = false, groupid = "", channelid = "" }) {
 			new: true,
 			upsert: true,
 			returnDocument: true
-		});
+		}).catch(error => console.error('coc #673 mongoDB error: ', error.name, error.reson));
 		return `現在這頻道的COC 成長紀錄功能為 ${(result.switch) ? '開啓' : '關閉'}
 以後CC擲骰將 ${(result.switch) ? '會' : '不會'}進行紀錄`
 	} catch (error) {
-		console.log(`dpRecordSwitch ERROR ${error.message}`)
+		console.error(`dpRecordSwitch ERROR ${error.message}`)
 		return '發生錯誤';
 	}
 }
 
 async function dpRecorder({ userID = "", groupid = "", channelid = "", skillName = "", skillPer = 0, skillPerStyle = "", skillResult = 0, userName = "" }) {
+	if (!checkMongodb.isDbOnline()) return;
 	try {
 		let result = await schema.developmentConductor.findOne({
 			groupID: channelid || groupid,
 			switch: true
+		}).catch(error => {
+			console.error('coc #687 mongoDB error: ', error.name, error.reson)
+			checkMongodb.dbErrOccurs();
 		});
 		if (!result) return;
 		/**
@@ -707,7 +852,7 @@ async function dpRecorder({ userID = "", groupid = "", channelid = "", skillName
 					new: true,
 					upsert: true,
 					returnDocument: true
-				});
+				}).catch(error => console.error('coc #710 mongoDB error: ', error.name, error.reson));
 		} else {
 			await schema.developmentRollingRecord.create({
 				groupID: channelid || groupid,
@@ -717,23 +862,23 @@ async function dpRecorder({ userID = "", groupid = "", channelid = "", skillName
 				date: Date.now(),
 				skillPer: skillPer,
 				skillResult: skillResult
-			});
+			}).catch(error => console.error('coc #720 mongoDB error: ', error.name, error.reson));
 			let countNumber = await schema.developmentRollingRecord.find({
 				groupID: channelid || groupid,
 				userID: userID,
 				skillName: "",
 				skillPerStyle: 'normal',
-			}).countDocuments();
+			}).countDocuments().catch(error => console.error('coc #726 mongoDB error: ', error.name, error.reson));
 			if (countNumber > 10) {
 				let moreThanTen = await schema.developmentRollingRecord.find({
 					groupID: channelid || groupid,
 					userID: userID,
 					skillName: "",
 					skillPerStyle: 'normal',
-				}).sort({ date: 1 }).limit(countNumber - 10);
+				}).sort({ date: 1 }).limit(countNumber - 10).catch(error => console.error('coc #733 mongoDB error: ', error.name, error.reson));
 
 				moreThanTen.forEach(async function (doc) {
-					await schema.developmentRollingRecord.deleteOne({ _id: doc._id });
+					await schema.developmentRollingRecord.deleteOne({ _id: doc._id }).catch(error => console.error('coc #736 mongoDB error: ', error.name, error.reson));
 				})
 			}
 
@@ -754,28 +899,28 @@ async function dpRecorder({ userID = "", groupid = "", channelid = "", skillName
 				skillPer: skillPer,
 				skillResult: skillResult,
 				userName: userName
-			});
+			}).catch(error => console.error('coc #757 mongoDB error: ', error.name, error.reson));
 			let countNumber = await schema.developmentRollingRecord.find({
 				groupID: channelid || groupid,
 				userID: userID,
 				skillPerStyle: skillPerStyle,
-			}).countDocuments();
+			}).countDocuments().catch(error => console.error('coc #762 mongoDB error: ', error.name, error.reson));
 			if (countNumber > 10) {
 				let moreThanTen = await schema.developmentRollingRecord.find({
 					groupID: channelid || groupid,
 					userID: userID,
 					skillPerStyle: skillPerStyle,
-				}).sort({ date: 1 }).limit(countNumber - 10);
+				}).sort({ date: 1 }).limit(countNumber - 10).catch(error => console.error('coc #768 mongoDB error: ', error.name, error.reson));
 
 				moreThanTen.forEach(async function (doc) {
-					await schema.developmentRollingRecord.deleteOne({ _id: doc._id });
+					await schema.developmentRollingRecord.deleteOne({ _id: doc._id }).catch(error => console.error('coc #771 mongoDB error: ', error.name, error.reson));
 				})
 			}
 		}
 
 
 	} catch (error) {
-		console.log(`dpRecordSwitch ERROR ${error.message}`)
+		console.error(`dpRecordSwitch ERROR ${error.message}`)
 		return '發生錯誤';
 	}
 
@@ -795,16 +940,36 @@ async function dpRecorder({ userID = "", groupid = "", channelid = "", skillName
 
 }
 
-function DevelopmentPhase(target, text) {
+function DevelopmentPhase(input) {
+	let result = ''
+	for (let index = 1; index < input.length; index++) {
+		let target = '',
+			text = '';
+		if (!isNaN(input[index])) {
+			target = input[index];
+		}
+		else continue;
+		if (input[index + 1] && isNaN(input[index + 1])) {
+			text = input[index + 1];
+			index++;
+		}
+		result += everyTimeDevelopmentPhase(target, text) + '\n' + '\n'
+	}
+	return result;
+
+}
+
+function everyTimeDevelopmentPhase(target, text = '') {
 	let result = '';
 	target = Number(target);
+	if (target > 1000) target = 1000;
 	if (text == undefined) text = "";
 	let skill = rollbase.Dice(100);
-	let confident = (target <= 89) ? true : false;
+	let confident = (target <= 89);
 	if (target > 95) target = 95;
 	if (skill >= 96 || skill > target) {
 		let improved = rollbase.Dice(10);
-		result = "成長或增強檢定: " + text + "\n1D100 > " + target + "\n擲出: " + skill + " → 成功!\n你的技能增加" + improved + "點!";
+		result = "成長或增強檢定: " + text + "\n1D100 > " + target + "\n擲出: " + skill + " → 成功!\n你的技能增加" + improved + "點，現在是" + (target + improved) + "點。";
 		if (confident && ((target + improved) >= 90)) {
 			result += `\n調查員的技能提升到90%以上，他的當前理智值增加2D6 > ${rollbase.Dice(6) + rollbase.Dice(6)}點。
 這一項獎勵顯示他經由精通一項技能而獲得自信。`
@@ -814,7 +979,6 @@ function DevelopmentPhase(target, text) {
 	}
 	return result;
 }
-
 function ccrt() {
 	let result = '';
 	//var rollcc = Math.floor(Math.random() * 10);
@@ -881,49 +1045,61 @@ async function coc7({ chack, text = "", userid, groupid, channelid, userName }) 
 	let result = '';
 	let temp = rollbase.Dice(100);
 	let skillPerStyle = "";
-	switch (true) {
-		case (temp == 1): {
-			result = '1D100 ≦ ' + chack + "：\n" + temp + ' → 恭喜！大成功！';
-			skillPerStyle = "criticalSuccess";
-			break;
+	let check = chack.split(',');
+	let name = text.split(',');
+	let checkNum = !check.some(i => !Number.isInteger(Number(i)));
+	if (!checkNum) return;
+	if (check.length >= 2) result += '聯合檢定\n'
+	for (let index = 0; index < check.length; index++) {
+		switch (true) {
+			case (temp == 1): {
+				result += '1D100 ≦ ' + check[index] + "　\n" + temp + ' → 恭喜！大成功！';
+				skillPerStyle = "criticalSuccess";
+				break;
+			}
+			case (temp == 100): {
+				result = '1D100 ≦ ' + check[index] + "　\n" + temp + ' → 啊！大失敗！';
+				skillPerStyle = "fumble";
+				break;
+			}
+			case (temp >= 96 && check[index] <= 49): {
+				result += '1D100 ≦ ' + check[index] + "　\n" + temp + ' → 啊！大失敗！';
+				skillPerStyle = "fumble";
+				break;
+			}
+			case (temp > check[index]): {
+				result += '1D100 ≦ ' + check[index] + "　\n" + temp + ' → 失敗';
+				skillPerStyle = "failure";
+				break;
+			}
+			case (temp <= check[index] / 5): {
+				result += '1D100 ≦ ' + check[index] + "　\n" + temp + ' → 極限成功';
+				skillPerStyle = "normal";
+				break;
+			}
+			case (temp <= check[index] / 2): {
+				result += '1D100 ≦ ' + check[index] + "　\n" + temp + ' → 困難成功';
+				skillPerStyle = "normal";
+				break;
+			}
+			case (temp <= check[index]): {
+				result += '1D100 ≦ ' + check[index] + "　\n" + temp + ' → 通常成功';
+				skillPerStyle = "normal";
+				break;
+			}
+			default:
+				break;
 		}
-		case (temp == 100): {
-			result = '1D100 ≦ ' + chack + "：\n" + temp + ' → 啊！大失敗！';
-			skillPerStyle = "fumble";
-			break;
+
+		if (text[index]) result += '：' + (name[index] || '');
+		result += '\n\n'
+		if (userid && groupid && skillPerStyle !== "failure") {
+			await dpRecorder({ userID: userid, groupid, channelid, skillName: name[index], skillPer: check[index], skillPerStyle, skillResult: temp, userName });
 		}
-		case (temp >= 96 && chack <= 49): {
-			result = '1D100 ≦ ' + chack + "：\n" + temp + ' → 啊！大失敗！';
-			skillPerStyle = "fumble";
-			break;
-		}
-		case (temp > chack): {
-			result = '1D100 ≦ ' + chack + "：\n" + temp + ' → 失敗';
-			skillPerStyle = "failure";
-			break;
-		}
-		case (temp <= chack / 5): {
-			result = '1D100 ≦ ' + chack + "：\n" + temp + ' → 極限成功';
-			skillPerStyle = "normal";
-			break;
-		}
-		case (temp <= chack / 2): {
-			result = '1D100 ≦ ' + chack + "：\n" + temp + ' → 困難成功';
-			skillPerStyle = "normal";
-			break;
-		}
-		case (temp <= chack): {
-			result = '1D100 ≦ ' + chack + "：\n" + temp + ' → 通常成功';
-			skillPerStyle = "normal";
-			break;
-		}
-		default:
-			break;
+
 	}
-	if (text) result += '：' + text;
-	if (userid && groupid && skillPerStyle !== "failure") {
-		await dpRecorder({ userID: userid, groupid, channelid, skillName: text, skillPer: chack, skillPerStyle, skillResult: temp, userName });
-	}
+
+
 	return result;
 }
 
@@ -979,39 +1155,57 @@ async function coc7chack({ chack, temp, text = "", userid, groupid, channelid, u
 
 
 async function coc7bp({ chack, text, userid, groupid, channelid, bpdiceNum, userName }) {
-	let result = '';
-	let temp0 = rollbase.Dice(10) - 1;
-	let countStr = '';
-	if (bpdiceNum > 0) {
-		for (let i = 0; i <= bpdiceNum; i++) {
-			let temp = rollbase.Dice(10);
-			let temp2 = temp.toString() + temp0.toString();
-			if (temp2 > 100) temp2 = parseInt(temp2) - 100;
-			countStr = countStr + temp2 + '、';
+	try {
+		let result = '';
+		let temp0 = rollbase.Dice(10) - 1;
+		let countStr = '';
+		let check = chack.split(',');
+		let name = (text && text.split(',')) || [];
+		let checkNum = !check.some(i => !Number.isInteger(Number(i)));
+		if (!checkNum) return;
+		if (check.length >= 2) result += '聯合檢定\n'
+		if (bpdiceNum > 0) {
+			for (let i = 0; i <= bpdiceNum; i++) {
+				let temp = rollbase.Dice(10);
+				let temp2 = temp.toString() + temp0.toString();
+				if (temp2 > 100) temp2 = parseInt(temp2) - 100;
+				countStr = countStr + temp2 + '、';
+			}
+			countStr = countStr.substring(0, countStr.length - 1)
+			let countArr = countStr.split('、');
+
+
+			for (let index = 0; index < check.length; index++) {
+				let finallyStr = countStr + ' → ' + await coc7chack(
+					{ chack: check[index], temp: Math.min(...countArr), text: name[index], userid, groupid, channelid, userName }
+				);
+				result += '1D100 ≦ ' + check[index] + "　\n" + finallyStr + '\n\n';
+			}
+
+
+			return result;
 		}
-		countStr = countStr.substring(0, countStr.length - 1)
-		let countArr = countStr.split('、');
-		countStr = countStr + ' → ' + await coc7chack(
-			{ chack, temp: Math.min(...countArr), text, userid, groupid, channelid, userName }
-		);
-		result = '1D100 ≦ ' + chack + "：\n" + countStr;
-		return result;
-	}
-	if (bpdiceNum < 0) {
-		bpdiceNum = Math.abs(bpdiceNum);
-		for (let i = 0; i <= bpdiceNum; i++) {
-			let temp = rollbase.Dice(10);
-			let temp2 = temp.toString() + temp0.toString();
-			if (temp2 > 100) temp2 = parseInt(temp2) - 100;
-			countStr = countStr + temp2 + '、';
+		if (bpdiceNum < 0) {
+			bpdiceNum = Math.abs(bpdiceNum);
+			for (let i = 0; i <= bpdiceNum; i++) {
+				let temp = rollbase.Dice(10);
+				let temp2 = temp.toString() + temp0.toString();
+				if (temp2 > 100) temp2 = parseInt(temp2) - 100;
+				countStr = countStr + temp2 + '、';
+			}
+			countStr = countStr.substring(0, countStr.length - 1)
+			let countArr = countStr.split('、');
+
+			for (let index = 0; index < check.length; index++) {
+				let finallyStr = countStr + ' → ' + await coc7chack(
+					{ chack: check[index], temp: Math.max(...countArr), text: name[index], userid, groupid, channelid }
+				);
+				result += '1D100 ≦ ' + check[index] + "  \n" + finallyStr + '\n\n';
+			}
+			return result;
 		}
-		countStr = countStr.substring(0, countStr.length - 1)
-		let countArr = countStr.split('、');
-		countStr = countStr + ' → ' + await coc7chack(
-			{ chack, temp: Math.max(...countArr), text, userid, groupid, channelid }
-		);
-		result = '1D100 ≦ ' + chack + "：\n" + countStr;
-		return result;
+	} catch (error) {
+		console.log('error', error)
 	}
 }
 function buildpulpchar() {
@@ -1277,7 +1471,8 @@ function sc(mainMsg) {
 				} catch (error) {
 					lossSan = result;
 				}
-				return `San Check\n1d100 ≦ ${san}\n擲出:${rollDice} → 大失敗!\n失去最大值 ${lossSan}點San`
+				let nowSan = ((san - lossSan) < 0) ? 0 : san - lossSan;
+				return `San Check\n1d100 ≦ ${san}\n擲出:${rollDice} → 大失敗!\n失去最大值 ${lossSan}點San\n現在San值是${nowSan}點`
 			}
 			return `San Check\n1d100 ≦ ${san}\n擲出:${rollDice} → 大失敗!`
 		}
@@ -1288,7 +1483,7 @@ function sc(mainMsg) {
 			}
 			if (rollSuccess) {
 				try {
-					lossSan = rollbase.BuildDiceCal(rollSuccess);
+					lossSan = rollbase.BuildDiceCal(rollSuccess).match(/\d+$/);
 				} catch (error) {
 					lossSan = rollSuccess;
 				}
@@ -1297,7 +1492,8 @@ function sc(mainMsg) {
 				lossSan = rollSuccess;
 			}
 			if (lossSan) {
-				return `San Check\n1d100 ≦ ${san}\n擲出:${rollDice} → 成功!\n失去${lossSan}點San`
+				let nowSan = ((san - lossSan) < 0) ? 0 : san - lossSan;
+				return `San Check\n1d100 ≦ ${san}\n擲出:${rollDice} → 成功!\n失去${lossSan}點San\n現在San值是${nowSan}點`
 			} else
 				return `San Check\n1d100 ≦ ${san}\n擲出:${rollDice} → 成功!\n不需要減少San`
 
@@ -1308,7 +1504,7 @@ function sc(mainMsg) {
 			if (rollFail) {
 
 				try {
-					lossSan = rollbase.BuildDiceCal(rollFail);
+					lossSan = rollbase.BuildDiceCal(rollFail)
 				} catch (error) {
 					lossSan = rollFail;
 				}
@@ -1317,7 +1513,9 @@ function sc(mainMsg) {
 				lossSan = rollFail;
 			}
 			if (lossSan) {
-				return `San Check\n1d100 ≦ ${san}\n擲出:${rollDice} → 失敗!\n失去${lossSan}點San`
+				lossSan = lossSan.match(/\d+$/);
+				let nowSan = ((san - lossSan) < 0) ? 0 : san - lossSan;
+				return `San Check\n1d100 ≦ ${san}\n擲出:${rollDice} → 失敗!\n失去${lossSan}點San\n現在San值是${nowSan}點`
 			} else
 				return `San Check\n1d100 ≦ ${san}\n擲出:${rollDice} → 失敗!\n但不需要減少San`
 

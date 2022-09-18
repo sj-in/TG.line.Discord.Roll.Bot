@@ -13,7 +13,7 @@
 
 const schema = require('./schema.js');
 const debugMode = (process.env.DEBUG) ? true : false;
-const msgSplitor = (/\S+/ig);
+const MESSAGE_SPLITOR = (/\S+/ig);
 const courtMessage = require('./logs').courtMessage || function () { };
 const getState = require('./logs').getState || function () { };
 const EXPUP = require('./level').EXPUP || function () { };
@@ -35,7 +35,6 @@ var parseInput = async function ({
 	titleName = '',
 	tgDisplayname = ''
 }) {
-	//console.log('InputStr: ' + inputStr);
 	let result = {
 		text: '',
 		type: 'text',
@@ -45,10 +44,10 @@ var parseInput = async function ({
 
 	let mainMsg = [];
 	inputStr = inputStr.replace(/^\s/g, '')
-	mainMsg = inputStr.match(msgSplitor); //定義輸入字串
+	mainMsg = inputStr.match(MESSAGE_SPLITOR); //定義輸入字串
 	//EXPUP 功能 + LevelUP 功能
 	if (groupid) {
-		let tempEXPUP = await EXPUP(groupid, userid, displayname, displaynameDiscord, membercount, tgDisplayname);
+		let tempEXPUP = await EXPUP(groupid, userid, displayname, displaynameDiscord, membercount, tgDisplayname, discordMessage);
 		result.LevelUp = (tempEXPUP && tempEXPUP.text) ? tempEXPUP.text : '';
 		result.statue = (tempEXPUP && tempEXPUP.statue) ? tempEXPUP.statue : '';
 	}
@@ -80,7 +79,8 @@ var parseInput = async function ({
 		})
 
 	} catch (error) {
-		console.error('rolldice GET ERROR:', error, ' inputStr: ', inputStr, ' botname: ', botname, ' Time: ', new Date());
+		console.error('rolldice GET ERROR:', error.name, ' inputStr: ', inputStr, ' botname: ', botname, ' Time: ', new Date());
+
 	}
 	if (rollDiceResult) {
 		result = JSON.parse(JSON.stringify(Object.assign({}, result, rollDiceResult)));
@@ -163,7 +163,6 @@ var rolldice = async function ({
 	titleName,
 	tgDisplayname
 }) {
-	//	console.log(exports)
 	//在下面位置開始分析trigger
 	if (!groupid) {
 		groupid = '';
@@ -180,7 +179,6 @@ var rolldice = async function ({
 
 	mainMsg[0].match(/^\.(\d{1,2})$/) ? mainMsg.shift() : null;
 
-	//console.log('target', target)
 	let retext = '';
 	let tempsave = {};
 	for (let index = 0; index < rollTimes; index++) {
@@ -230,7 +228,6 @@ var rolldice = async function ({
 	if (retext) {
 		tempsave.text = retext;
 	}
-	//console.log('tempsave: ', tempsave)
 	return tempsave;
 }
 
@@ -242,7 +239,7 @@ function findRollList(mainMsg) {
 	let findTarget = idList.find(item => {
 		if (item.prefixs && item.prefixs()) {
 			for (let index = 0; index < item.prefixs().length; index++) {
-				if (mainMsg[0].match(item.prefixs()[index].first) && (mainMsg[1].match(item.prefixs()[index].second) || item.prefixs()[index].second == null)) {
+				if (mainMsg && mainMsg[0] && mainMsg[0].match(item.prefixs()[index].first) && (mainMsg[1] && mainMsg[1].match(item.prefixs()[index].second) || item.prefixs()[index].second == null)) {
 					return true
 				}
 			}
@@ -263,9 +260,9 @@ async function stateText() {
 	text += '\n Telegram總擲骰次數: ' + state.TelegramCountRoll;
 	text += '\n Whatsapp總擲骰次數: ' + state.WhatsappCountRoll;
 	text += '\n 網頁版總擲骰次數: ' + state.WWWCountRoll;
-	text += '\n 使用經驗值功能的群組: ' + await schema.trpgLevelSystem.countDocuments({ Switch: '1' });
-	text += '\n 已新增的角色卡: ' + await schema.characterCard.countDocuments({});
-	text += '\n HKTRPG使用者數量: ' + await schema.firstTimeMessage.countDocuments({});
+	text += '\n 使用經驗值功能的群組: ' + await schema.trpgLevelSystem.countDocuments({ Switch: '1' }).catch(error => console.error('analytics #266 mongoDB error: ', error.name, error.reson));
+	text += '\n 已新增的角色卡: ' + await schema.characterCard.countDocuments({}).catch(error => console.error('analytics #267 mongoDB error: ', error.name, error.reson));
+	text += '\n HKTRPG使用者數量: ' + await schema.firstTimeMessage.countDocuments({}).catch(error => console.error('analytics #268 mongoDB error: ', error.name, error.reson));
 	text += '\n 擲骰系統使用的隨機方式: random-js nodeCrypto';
 	return text;
 }
@@ -286,7 +283,7 @@ async function cmdfunction({
 	tgDisplayname
 }) {
 	let newInputStr = result.characterReRollItem || result.text;
-	let mainMsg = newInputStr.match(msgSplitor); //定義輸入字串
+	let mainMsg = newInputStr.match(MESSAGE_SPLITOR); //定義輸入字串
 	//檢查是不是要停止
 	let tempResut = {};
 	try {
@@ -309,6 +306,7 @@ async function cmdfunction({
 	}
 	(debugMode) ? console.log('            inputStr2: ', newInputStr) : '';
 	if (typeof tempResut === 'object' && tempResut !== null) {
+		if (result.characterName) tempResut.text = `${result.characterName} 進行 ${result.characterReRollName} 擲骰\n ${tempResut.text}`
 		return tempResut;
 	}
 	return;

@@ -19,8 +19,8 @@ if (process.env.BROADCAST) {
 		}
 	});
 }
-
-const isHeroku = process.env._ && process.env._.indexOf("heroku");
+const qrcode = require('qrcode-terminal');
+const isHeroku = (process.env._ && process.env._.indexOf("heroku")) > 0 ? true : false;
 var TargetGM = (process.env.mongoURL) ? require('../roll/z_DDR_darkRollingToGM').initialize() : '';
 const schema = require('../modules/schema');
 const opt = {
@@ -35,10 +35,9 @@ const newMessage = require('./message');
 exports.analytics = require('./analytics');
 exports.z_stop = require('../roll/z_stop');
 const {
-	Client
+	Client, LocalAuth
 } = require('whatsapp-web.js');
-const msgSplitor = (/\S+/ig);
-const qrcode = require('qrcode-terminal');
+const MESSAGE_SPLITOR = (/\S+/ig);
 // Path where the session data will be stored
 const SESSION_FILE_PATH = './modules/whatsapp-session.json';
 
@@ -48,8 +47,9 @@ const maxRetry = 6;
 var retry = 0;
 
 async function startUp() {
+	/**
 	if (process.env.mongoURL) {
-		let data = await schema.whatsapp.findOne({});
+		let data = await schema.whatsapp.findOne({}).catch(error => console.error('whatsapp #52 mongoDB error: ', error.name, error.reson));
 		sessionData = (data && data.sessionData) ? JSON.parse(data.sessionData.toString()) : null;
 	}
 	if (!isHeroku && require('fs').existsSync(SESSION_FILE_PATH) && !sessionData) {
@@ -58,52 +58,56 @@ async function startUp() {
 		} catch (error) {
 			require('fs').unlink(SESSION_FILE_PATH, function (err) {
 				if (err) {
-					console.error(err);
+					console.error('whatsapp error: ', err);
 				}
 			});
 		}
 
 
 	}
+	 */
 	const client = new Client({
 		session: sessionData || null,
+		authStrategy: new LocalAuth(),
 		puppeteer: (isHeroku) ? herokuPuppeteer : normalPuppeteer
 	});
 	client.initialize();
 	// Save session values to the file upon successful auth
-	client.on('authenticated', async (session) => {
-		sessionData = session;
-		retry = 0;
-		if (process.env.mongoURL) {
-			await schema.whatsapp.findOneAndUpdate({}, { sessionData: JSON.stringify(session) }, opt)
-		} else if (!isHeroku)
-			require('fs').writeFile(SESSION_FILE_PATH, JSON.stringify(session), function (err) {
-				if (err) {
-					console.error(err);
-				}
-			});
-	});
-
-	client.on('auth_failure', async (msg) => {
-		// Fired if session restore was unsuccessfull
-		console.error(`AUTHENTICATION FAILURE: ${msg}\nRetry #${retry}`);
-		retry++;
-		if (retry > maxRetry) {
-			sessionData = '';
-			if (process.env.mongoURL) {
-				await schema.whatsapp.findOneAndUpdate({}, { sessionData: '' }, opt)
-			}
-			if (!isHeroku) {
-				require('fs').unlink(SESSION_FILE_PATH, function (err) {
-					if (err) {
-						console.error(err);
-					}
-				});
-			}
+	/**
+client.on('authenticated', async (session) => {
+sessionData = session;
+retry = 0;
+if (process.env.mongoURL) {
+	await schema.whatsapp.findOneAndUpdate({}, { sessionData: JSON.stringify(session) }, opt).catch(error => console.error('whatsapp #78 mongoDB error: ', error.name, error.reson))
+} else if (!isHeroku)
+	require('fs').writeFile(SESSION_FILE_PATH, JSON.stringify(session), function (err) {
+		if (err) {
+			console.error('whatsapp error: ', err);
 		}
-		startUp();
 	});
+});
 
+client.on('auth_failure', async (msg) => {
+
+// Fired if session restore was unsuccessfull
+console.error(`AUTHENTICATION FAILURE: ${msg}\nRetry #${retry}`);
+retry++;
+if (retry > maxRetry) {
+	sessionData = '';
+	if (process.env.mongoURL) {
+		await schema.whatsapp.findOneAndUpdate({}, { sessionData: '' }, opt).catch(error => console.error('whatsapp #94 mongoDB error: ', error.name, error.reson))
+	}
+	if (!isHeroku) {
+		require('fs').unlink(SESSION_FILE_PATH, function (err) {
+			if (err) {
+				console.error('whatsapp error: ', err);
+			}
+		});
+	}
+}
+//startUp();
+});
+*/
 
 
 	client.on('qr', (qr) => {
@@ -143,16 +147,15 @@ async function startUp() {
 		let getChatDetail = await client.getChatById(msg.from)
 		if (getChatDetail.isGroup) {
 			groupid = getChatDetail.id._serialized;
-			//console.log('groupid:', groupid)
 			membercount = getChatDetail.participants.length - 1;
 		}
-		let mainMsg = inputStr.match(msgSplitor); //定義輸入字串
+		let mainMsg = inputStr.match(MESSAGE_SPLITOR); //定義輸入字串
 		if (mainMsg && mainMsg[0]) {
 			trigger = mainMsg[0].toString().toLowerCase();
 
 		}
 		//指定啟動詞在第一個詞&把大階強制轉成細階
-		if (trigger == ".me" && !z_stop(mainMsg, groupid)) {
+		if ((trigger == ".me" || trigger == ".mee") && !z_stop(mainMsg, groupid)) {
 			displaynamecheck = false;
 		}
 		let privatemsg = 0;
@@ -178,7 +181,7 @@ async function startUp() {
 
 
 
-		let target = exports.analytics.findRollList(inputStr.match(msgSplitor));
+		let target = exports.analytics.findRollList(inputStr.match(MESSAGE_SPLITOR));
 		if (!target && privatemsg == 0) return null;
 		var userid, displayname, channelid, channelKeyword = '';
 		//得到暗骰的數據, GM的位置
@@ -197,7 +200,7 @@ async function startUp() {
 		let rplyVal = {};
 		if (mainMsg && mainMsg[0])
 			trigger = mainMsg[0].toString().toLowerCase(); // 指定啟動詞在第一個詞&把大階強制轉成細階
-		if (trigger == ".me") {
+		if (trigger == ".me" || trigger == ".mee") {
 			displaynamecheck = false;
 		}
 		// 訊息來到後, 會自動跳到analytics.js進行骰組分析
@@ -233,7 +236,6 @@ async function startUp() {
 		}
 		//LevelUp功能
 		if (groupid && rplyVal && rplyVal.LevelUp) {
-			//	console.log('result.LevelUp 2:', rplyVal.LevelUp)
 			let text = `@${displayname}${(rplyVal.statue) ? ' ' + rplyVal.statue : ''}
 			${rplyVal.LevelUp}`
 			client.sendMessage(msg.from, text);
@@ -254,8 +256,6 @@ async function startUp() {
 		switch (true) {
 			case privatemsg == 1:
 				// 輸入dr  (指令) 私訊自己
-				//
-				//console.log('ctx.message.chat.type: ', ctx.message.chat.type)
 				if (groupid) {
 					SendDR(msg, "@" + displayname + '暗骰給自己');
 				}
@@ -294,7 +294,6 @@ async function startUp() {
 				break;
 			default:
 				if (displaynamecheck == false) {
-					//	console.log('displaynamecheck False')
 					SendToId(msg.from, rplyVal, client);
 				} else
 					SendToReply(msg, rplyVal);
@@ -305,8 +304,8 @@ async function startUp() {
 
 	client.on('message_ack', async (msg, ack) => {
 		if (ack > 0) {
-			const chat = msg.getChat();
-			chat.clearMessages();
+			const chat = await msg.getChat();
+			await chat.clearMessages();
 		}
 	});
 
@@ -363,7 +362,7 @@ function SendToId(targetid, rplyVal, client) {
 }
 
 function z_stop(mainMsg, groupid) {
-	if (!Object.keys(exports.z_stop).length || !exports.z_stop.initialize().save) {
+	if (!Object.keys(exports.z_stop).length || !exports.z_stop.initialize().save || !mainMsg || !groupid) {
 		return false;
 	}
 	let groupInfo = exports.z_stop.initialize().save.find(e => e.groupid == groupid)

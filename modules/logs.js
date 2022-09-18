@@ -1,10 +1,12 @@
+"use strict";
 if (!process.env.mongoURL) return;
 //Log everyday 01:00
 const debugMode = (process.env.DEBUG) ? true : false;
 const schema = require('./schema.js');
+const checkMongodb = require('./dbWatchdog.js');
 //50次 多少條訊息會上傳一次LOG
-const oneHour = 1 * 60 * 60 * 1000;
-const fiveMinutes = 5 * 60 * 1000;
+const ONE_HOUR = 1 * 60 * 60 * 1000;
+const FIVE_MINUTES = 5 * 60 * 1000;
 var shardid = 0;
 //每一小時 24 * 60 * 60 * 1000 多久會上傳一次LOG紀錄 
 const RollingLog = {
@@ -32,16 +34,16 @@ const RollingLog = {
     try {
         await getRecords();
     } catch (e) {
-        console.log(e)
+        console.log(`log error #35 ${e}`)
         setTimeout(async () => {
             await getRecords();
         }, 100)
 
     }
     try {
-        const loopLogFiveMinutes = setInterval(saveLog, fiveMinutes);
+        const loopLogFiveMinutes = setInterval(saveLog, FIVE_MINUTES);
     } catch (e) {
-        console.log(e)
+        console.log(`log error #35 ${e}`)
     }
 })();
 
@@ -49,7 +51,7 @@ const RollingLog = {
 
 
 var getState = async function () {
-    let theNewData = await schema.RealTimeRollingLog.findOne({});
+    let theNewData = await schema.RealTimeRollingLog.findOne({}).catch(error => console.error('log # 52 mongoDB error: ', error.name, error.reson));
     if (!theNewData) return;
     theNewData.RealTimeRollingLogfunction.LogTime = theNewData.RealTimeRollingLogfunction.LogTime.replace(/\s+GMT.*$/, '');
     theNewData.RealTimeRollingLogfunction.StartTime = theNewData.RealTimeRollingLogfunction.StartTime.replace(/\s+GMT.*$/, '');
@@ -60,6 +62,7 @@ var getState = async function () {
 //上傳用
 async function saveLog() {
     //更新LogTime 然後上傳紀錄
+    if (!checkMongodb.isDbOnline()) return;
     RollingLog.LogTime = Date(Date.now()).toLocaleString("en-US", {
         timeZone: "Asia/HongKong"
     });
@@ -87,14 +90,16 @@ async function saveLog() {
         }
     }, {
         upsert: true
+    }).catch(error => {
+        console.error('log #90 mongoDB error: ', error.name, error.reson)
+        checkMongodb.dbErrOccurs();
     })
     //把擲骰的次數還原 為0
     resetLog();
 
     //假如過了一小時則上載中途紀錄RollingLog
-    if (Date.now() - RollingLog.LastTimeLog >= (oneHour))
+    if (Date.now() - RollingLog.LastTimeLog >= (ONE_HOUR))
         pushToDefiniteLog();
-    //console.log("RollingLog: ", RollingLog)
     return null;
 }
 
@@ -102,7 +107,7 @@ async function pushToDefiniteLog() {
     if (shardid !== 0) return;
     //更新最後的RollingLog 儲存時間
     RollingLog.LastTimeLog = Date.now();
-    let theNewData = await schema.RealTimeRollingLog.findOne({});
+    let theNewData = await schema.RealTimeRollingLog.findOne({}).catch(error => console.error('log #105 mongoDB error: ', error.name, error.reson));
     let temp = {
         RollingLogfunction:
         {
@@ -123,12 +128,16 @@ async function pushToDefiniteLog() {
             ApiCountText: theNewData.RealTimeRollingLogfunction.ApiCountText
         }
     }
-    await schema.RollingLog.create(temp);
+    await schema.RollingLog.create(temp).catch(error => console.error('logs #126 mongoDB error: ', error.name, error.reson));
     return;
 }
 
 async function getRecords() {
-    let theNewData = await schema.RealTimeRollingLog.findOne({});
+    if (!checkMongodb.isDbOnline()) return;
+    let theNewData = await schema.RealTimeRollingLog.findOne({}).catch(error => {
+        console.error('log # 131 mongoDB error: ', error.name, error.reson)
+        checkMongodb.dbErrOccurs();
+    });
 
     if (!theNewData) {
         RollingLog.LastTimeLog = Date.now();
@@ -149,7 +158,6 @@ async function getRecords() {
         timeZone: "Asia/HongKong"
     });
 
-    //console.log('RollingLog', RollingLog)
     console.log('Rolling Log is Ready')
     return;
 }

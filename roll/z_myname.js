@@ -10,20 +10,22 @@ const opt = {
     runValidators: true,
     new: true
 }
-var gameName = function () {
+const gameName = function () {
     return '【你的名字】.myname / .me .me1 .me泉心'
 }
-
-var gameType = function () {
+const convertRegex = function (str) {
+    return str.toString().replace(/([.?*+^$[\]\\(){}|-])/g, "\\$1");
+};
+const gameType = function () {
     return 'Tool:myname:hktrpg'
 }
-var prefixs = function () {
+const prefixs = function () {
     return [{
         first: /^\.myname$|^\.me\S+/i,
         second: null
     }]
 }
-var getHelpMessage = function () {
+const getHelpMessage = function () {
     return `【你的名字】Discord限定功能
 TRPG扮演發言功能
 你可以設定一個角色的名字及頭像，
@@ -71,11 +73,11 @@ https://i.imgur.com/VSzO08U.png
 支援擲骰，請使用[[]]來包著擲骰指令
     `
 }
-var initialize = function () {
+const initialize = function () {
     return "";
 }
 
-var rollDiceCommand = async function ({
+const rollDiceCommand = async function ({
     inputStr,
     mainMsg,
     userid,
@@ -127,7 +129,7 @@ var rollDiceCommand = async function ({
                         return rply
                     }
                 } catch (error) {
-                    console.error("移除角色失敗, inputStr: ", inputStr);
+                    //   console.error("移除角色失敗, inputStr: ", inputStr);
                     rply.text = '移除出錯\n移除角色指令為 .myname delete (序號 或 名字縮寫) \n 如 .myname delete 1 / .myname delete 小雲\n序號請使用.myname show 查詢'
                     return rply
                 }
@@ -138,14 +140,17 @@ var rollDiceCommand = async function ({
 
                 if (myNames) {
                     rply.text = `移除成功，${myNames}`
+                    rply.quotes = true;
                     return rply
                 } else {
                     rply.text = '移除出錯\n移除角色指令為 .myname delete (序號/名字縮寫) \n 如 .myname delete 1 / .myname delete 小雲\n序號請使用.myname show 查詢'
+                    rply.quotes = true;
                     return rply
                 }
             } catch (error) {
-                console.error("移除角色失敗, inputStr: ", inputStr);
+                //   console.error("移除角色失敗, inputStr: ", inputStr);
                 rply.text = '移除出錯\n移除角色指令為 .myname delete (序號/名字縮寫) \n 如 .myname delete 1 / .myname delete 小雲\n序號請使用.myname show 查詢'
+                rply.quotes = true;
                 return rply
             }
         }
@@ -160,7 +165,7 @@ var rollDiceCommand = async function ({
             let limit = limitAtArr[lv];
             let myNamesLength = await schema.myName.countDocuments({ userID: userid })
             if (myNamesLength >= limit) {
-                rply.text = '.myname 個人上限為' + limit + '個\n支援及解鎖上限 https://www.patreon.com/HKTRPG\n或自組服務器\n源代碼  http://bit.ly/HKTRPG_GITHUB';
+                rply.text = '.myname 個人上限為' + limit + '個\n支援及解鎖上限 https://www.patreon.com/HKTRPG\n';
                 rply.quotes = true;
                 return rply;
             }
@@ -168,10 +173,12 @@ var rollDiceCommand = async function ({
             let checkName = checkMyName(inputStr);
             if (!checkName || !checkName.name || !checkName.imageLink) {
                 rply.text = `輸入出錯\n ${this.getHelpMessage()}`;
+                rply.quotes = true;
                 return rply;
             }
             if (!checkName.imageLink.match(/^http/i)) {
                 rply.text = `輸入出錯\n 圖示link 必須符合 http/https 開頭`;
+                rply.quotes = true;
                 return rply;
             }
             let myName = {};
@@ -193,20 +200,14 @@ var rollDiceCommand = async function ({
         case /^\.me\S+/i.test(mainMsg[0]): {
             //.myname 泉心造史 https://example.com/example.jpg
             if (!mainMsg[1]) {
-                rply.text = this.getHelpMessage();
-                rply.quotes = true;
-                return rply;
+                return;
             }
             if (!groupid) {
-                rply.text = "這功能只可以在頻道中使用"
+                rply.text = ".me(X) 這功能只可以在頻道中使用"
                 rply.quotes = true;
                 return rply;
             }
             let checkName = checkMeName(mainMsg[0]);
-            if (!checkName) {
-                rply.text = `輸入出錯\n ${this.getHelpMessage()} `;
-                return rply;
-            }
             let myName;
             if (typeof checkName == 'number') {
                 let myNameFind = await schema.myName.find({ userID: userid }).skip(checkName - 1).limit(1);
@@ -216,14 +217,16 @@ var rollDiceCommand = async function ({
             }
             if (!myName) {
                 try {
-                    myName = await schema.myName.findOne({ userID: userid, shortName: new RegExp(checkName, 'i') });
+                    myName = await schema.myName.findOne({ userID: userid, shortName: new RegExp('^' + convertRegex(checkName) + '$', 'i') });
                 } catch (error) {
-                    rply.text = `輸入出錯\n ${this.getHelpMessage()} `;
+                    // rply.text = `找不到角色 - ${checkName} \n可能是序號或名字不對`;
+                    // rply.quotes = true;
                     return rply;
                 }
             }
             if (!myName) {
-                rply.text = `找不到角色 - ${checkName} `;
+                //   rply.text = `找不到角色 - ${checkName} \n可能是序號或名字不對`;
+                // rply.quotes = true;
                 return rply;
             }
             rply.myName = showMessage(myName, inputStr);

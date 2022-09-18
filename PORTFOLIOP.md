@@ -1,11 +1,11 @@
 # HKTRPG作品集
 
-[![Discord](https://camo.githubusercontent.com/1ed68e831b9f36401679d31acfc1c7ba74c4223d2559192718f32d3e34ee3074/68747470733a2f2f696d672e736869656c64732e696f2f646973636f72642f3237383230323334373136353937343532393f6c6f676f3d646973636f7264)](https://discord.gg/vx4kcm7)
+[![Discord](https://camo.githubusercontent.com/1ed68e831b9f36401679d31acfc1c7ba74c4223d2559192718f32d3e34ee3074/68747470733a2f2f696d672e736869656c64732e696f2f646973636f72642f3237383230323334373136353937343532393f6c6f676f3d646973636f7264)](https://support.hktrpg.com)
 
 HKTRPG 興趣使然地創作及維護 TRPG工具，包括
 
 - 網上角色卡 - [Discord連動角色卡](#網上角色卡)，[無限恐怖TRPG角色卡](#網上角色卡)，[分享其他角色卡](#網上角色卡)
-- 擲骰BOT - [HKTRPG](#hktrpg-擲骰bot)
+- 擲骰BOT - [HKTRPG](#hktrpg-擲骰bot)，[HKTRPG官方使用教學](https://bothelp.hktrpg.com)
 - 擲骰平台 - [TRPG擲骰聊天室](#擲骰平台)，[手機擲骰](#擲骰平台)
 - 跑團平台 - [烏冬](#跑團平台)，[冰丼](#跑團平台)
 - 跑團工具 - [跑團工具](#跑團工具)
@@ -43,7 +43,7 @@ HKTRPG 興趣使然地創作及維護 TRPG工具，包括
 
 已經開發四年的骰子機械人，因為一個[教學](https://docs.google.com/document/d/1dYnJqF2_QTp90ld4YXj6X8kgxvjUoHrB4E2seqlDlAk/edit#heading=h.91v9osx4fxtt)而誕生出來。
 
-[29種功能詳情](https://hktrpg.github.io/TG.line.Discord.Roll.Bot/)，包括
+[29種功能詳情](https://bothelp.hktrpg.com/)，包括
 > 暗骰, 各類TRPG骰子擲骰, 自定義骰子, 頻道經驗值, 頻道遊戲, 占卜, 先攻表, TRPG網上角色卡, 搜圖,
 >
 > 翻譯, Discord 聊天紀錄匯出, 數學計算, 做筆記, 隨機抽選, wiki查詢, 資料庫快速查詢功能
@@ -76,7 +76,7 @@ HKTRPG 興趣使然地創作及維護 TRPG工具，包括
 ![烏冬](https://github.com/hktrpg/TG.line.Discord.Roll.Bot/blob/master/views/image/demo%20-%20udo.png?raw=true)
 
 - [冰丼](https://z02.hktrpg.com)
-冰豆腐的進化版?只翻譯成中文
+凍豆腐的進化版，已翻譯成中文
 
 ## ROLL20
 

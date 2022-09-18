@@ -5,19 +5,22 @@ if (!process.env.mongoURL) {
 const math = require('mathjs')
 const schema = require('../modules/schema.js');
 const rollDice = require('./rollbase').rollDiceCommand;
-var gameName = function () {
-    return '先攻表功能 .in (remove clear reroll) .init'
+const convertRegex = function (str) {
+    return str.replace(/([.?*+^$[\]\\(){}|-])/g, "\\$1");
+};
+const gameName = function () {
+    return '【先攻表功能】 .in (remove clear reroll) .init'
 }
-var gameType = function () {
+const gameType = function () {
     return 'Tool:trpgInit:hktrpg'
 }
-var prefixs = function () {
+const prefixs = function () {
     return [{
         first: /(^[.]init$)|(^[.]initn$)|(^[.]in$)/ig,
         second: null
     }]
 }
-var getHelpMessage = async function () {
+const getHelpMessage = async function () {
     return `【先攻表功能】 .in (remove clear reroll) .init
 這是讓你快速自定義先攻表的功能
 它可以儲存你的擲骰方法，然後直接重新投擲，而不需要再輸入。
@@ -34,11 +37,11 @@ var getHelpMessage = async function () {
 .initn     - 顯示先攻表，由小到大
 `
 }
-var initialize = function () {
+const initialize = function () {
     return;
 }
 
-var rollDiceCommand = async function ({
+const rollDiceCommand = async function ({
     inputStr,
     mainMsg,
     groupid,
@@ -75,7 +78,7 @@ var rollDiceCommand = async function ({
                 $pull: {
                     "list": {
                         "name": {
-                            $regex: new RegExp(name, "i")
+                            $regex: new RegExp('^' + convertRegex(name) + '$', "i")
                         }
                     }
                 }
@@ -151,6 +154,7 @@ var rollDiceCommand = async function ({
                     await temp.save();
                 } catch (error) {
                     rply.text = "先攻表更新失敗，\n" + error;
+                    console.error('init #154 mongoDB error: ', error.name, error.reson)
                     return rply;
                 }
                 rply.text = name + ' 的先攻值是 ' + Number(result);

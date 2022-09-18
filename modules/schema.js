@@ -21,8 +21,22 @@ const randomAns = mongoose.model('randomAns', {
     randomAnsfunction: Array
 });
 
+const randomAnsPersonal = mongoose.model('randomAnsPersonal', {
+    userid: String,
+    title: String,
+    answer: Array,
+    serial: Number
+});
+
+//cancel
 const randomAnsAllgroup = mongoose.model('randomAnsAllgroup', {
     randomAnsAllgroup: Array
+});
+
+const randomAnsServer = mongoose.model('randomAnsServer', {
+    title: String,
+    answer: Array,
+    serial: Number
 });
 
 
@@ -378,7 +392,10 @@ const agendaAtHKTRPG = mongoose.model('agendaAtHKTRPG', new mongoose.Schema({
     priority: Number,
     type: String,
     nextRunAt: Date,
-    lastModifiedBy: String
+    lastModifiedBy: String,
+    roleName: String,
+    imageLink: String
+
 }, { collection: "agendaAtHKTRPG" }));
 const firstTimeMessage = mongoose.model('firstTimeMessage', new mongoose.Schema({
     userID: String,
@@ -402,8 +419,53 @@ const whatsapp = mongoose.model('whatsapp', new mongoose.Schema({
     sessionData: String
 }));
 
+const roleReact = mongoose.model('roleReact', new mongoose.Schema({
+    message: String,
+    messageID: String,
+    groupid: String,
+    serial: Number,
+    detail: [{
+        roleID: String,
+        emoji: String,
+    }]
+
+}));
+
+const roleInvites = mongoose.model('roleInvites', new mongoose.Schema({
+    roleID: String,
+    invitesLink: String,
+    groupid: String,
+    serial: Number
+}));
+
+const translateChannel = mongoose.model('translateChannel', new mongoose.Schema({
+    groupid: String,
+    channelid: String,
+    switch: Boolean
+}));
+
+const bcdiceRegedit = mongoose.model('bcdiceRegedit', new mongoose.Schema({
+    botname: String,
+    channelid: String,
+    trpgId: String
+}));
+
+const multiServer = mongoose.model('multiServer', new mongoose.Schema({
+    channelid: String,
+    multiId: String,
+    guildName: String,
+    channelName: String,
+    guildID: String,
+    botname: String
+}));
+
+const mongodbState = mongoose.model('mongodbState', new mongoose.Schema({
+    errorDate: Date
+}));
+
 module.exports = {
     randomAns,
+    multiServer,
     block,
     chattest,
     randomAnsAllgroup,
@@ -434,7 +496,14 @@ module.exports = {
     firstTimeMessage,
     theNewsMessage,
     myName,
-    whatsapp
+    whatsapp,
+    roleInvites,
+    roleReact,
+    randomAnsServer,
+    randomAnsPersonal,
+    translateChannel,
+    bcdiceRegedit,
+    mongodbState
 }
 //const Cat = mongoose.model('Cat', { name: String });
 //const kitty = new Cat({ name: 'Zildjian' });

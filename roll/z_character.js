@@ -3,17 +3,18 @@ if (!process.env.mongoURL) {
     return;
 }
 var variables = {};
+const mathjs = require('mathjs');
 const rollDice = require('./rollbase').rollDiceCommand;
 const schema = require('../modules/schema.js');
 const VIP = require('../modules/veryImportantPerson');
-const limitArr = [4, 20, 20, 30, 30, 99, 99, 99];
-var gameName = function () {
-    return '角色卡功能 .char (add edit show delete use nonuse) .ch (set show showall)'
+const FUNCTION_LIMIT = [4, 20, 20, 30, 30, 99, 99, 99];
+const gameName = function () {
+    return '【角色卡功能】 .char (add edit show delete use nonuse button) .ch (set show showall button)'
 }
-var gameType = function () {
+const gameType = function () {
     return 'Tool:trpgcharacter:hktrpg'
 }
-var prefixs = function () {
+const prefixs = function () {
     return [{
         first: /(^[.]char$)|(^[.]ch$)/ig,
         second: null
@@ -39,7 +40,7 @@ COC export to roll20?
 */
 
 
-var getHelpMessage = async function () {
+const getHelpMessage = async function () {
     return `【角色卡功能】
 以個人為單位, 一張卡可以在不同的群組使用
 目標是文字團可以快速擲骰，及更新角色狀態。
@@ -66,6 +67,7 @@ var getHelpMessage = async function () {
 .char use 角色卡名字 - 可以在該群組中使用指定角色卡
 .char nonuse - 可以在該群組中取消使用角色卡
 .char delete 角色卡名字 - 可以刪除指定角色卡
+.char button 角色卡名字 - Discord限定，可以產生按鈕指令，會使用直接擲骰指令
 -----.ch 功能-----
 在群組中使用.char use (角色名) 後, 就可以啟動角色卡功能
 .ch 項目名稱 項目名稱 - 沒有加減的話, 會單純顯示數據或擲骰
@@ -75,20 +77,22 @@ var getHelpMessage = async function () {
 .ch set 項目名稱 新內容 - 直接更改內容
 .ch show - 顯示角色卡的state 和roll 內容
 .ch showall - 顯示角色卡的所有內容
+.ch button  - Discord限定，可以產生按鈕指令，會調用.ch 指令
 -----範例及運算式-----
 角色卡還可以進行運算，詳情請看
 https://github.com/hktrpg/TG.line.Discord.Roll.Bot/wiki/Character-Card `
 }
 
-var initialize = function () {
+const initialize = function () {
     return variables;
 }
 
 // eslint-disable-next-line no-unused-vars
-var rollDiceCommand = async function ({
+const rollDiceCommand = async function ({
     inputStr,
     mainMsg,
     groupid,
+    botname,
     userid,
     channelid
 }) {
@@ -107,7 +111,7 @@ var rollDiceCommand = async function ({
     let temp;
     let tempMain = {};
     let lv;
-    let limit = limitArr[0];
+    let limit = FUNCTION_LIMIT[0];
     let check;
     switch (true) {
         case /^help$/i.test(mainMsg[1]) || !mainMsg[1]:
@@ -196,7 +200,14 @@ var rollDiceCommand = async function ({
             for (let index = 0; index < doc.length; index++) {
                 rply.text += index + ': ' + doc[index].name + '　\n';
             }
-            rply.text += '\n輸入 .char show0 可以顯示0號角色卡\n';
+            rply.text += `\n輸入 .char show0 可以顯示0號角色卡
+            .char button 角色名字 可以產生你的角色卡按鈕
+            輸入 .char use 角色名字  可以在頻道中使用角色卡
+            
+            輸入use後，
+            再輸入 .ch button 也可以產生你的角色卡按鈕
+            
+            兩種產生的按鈕指令會有所不同，前者調用.ch後者產生直接擲骰的指令 `;
             return rply;
         case /(^[.]char$)/i.test(mainMsg[0]) && /^add$/i.test(mainMsg[1]) && /^\S+$/.test(mainMsg[2]): {
             Card = await analysicInputCharacterCard(inputStr); //分析輸入的資料
@@ -211,12 +222,12 @@ var rollDiceCommand = async function ({
             lv = await VIP.viplevelCheckUser(userid);
             let gpLv = await VIP.viplevelCheckGroup(groupid);
             lv = (gpLv > lv) ? gpLv : lv;
-            limit = limitArr[lv];
+            limit = FUNCTION_LIMIT[lv];
             check = await schema.characterCard.find({
                 id: userid
             });
             if (check.length >= limit) {
-                rply.text = '你的角色卡上限為' + limit + '張' + '\n支援及解鎖上限 https://www.patreon.com/HKTRPG\n或自組服務器\n源代碼  http://bit.ly/HKTRPG_GITHUB';
+                rply.text = '你的角色卡上限為' + limit + '張' + '\n支援及解鎖上限 https://www.patreon.com/HKTRPG\n';
                 return rply
             }
             filter = {
@@ -365,6 +376,29 @@ var rollDiceCommand = async function ({
             //檢查有沒有重覆
             rply.text = '刪除角色卡成功: ' + doc.name
             return rply;
+        case /(^[.]char$)/i.test(mainMsg[0]) && /^button$/i.test(mainMsg[1]) && /^\S+$/.test(mainMsg[2]): {
+            if (!groupid) {
+                rply.text = '此功能必須在群組中使用'
+                return rply
+            }
+            if (botname !== "Discord") {
+                rply.text = "這是Discord限定功能"
+                return rply;
+            }
+
+            filter = {
+                id: userid,
+                name: new RegExp('^' + convertRegex(inputStr.replace(/^\.char\s+button\s+/i, '')) + '$', "i")
+            }
+            const doc = await schema.characterCard.findOne(filter);
+            if (!doc) {
+                rply.text = '沒有此角色卡'
+                return rply
+            }
+            if (doc.roll)
+                rply.requestRollingCharacter = [handleRequestRolling(doc), doc.name, 'char']
+            return rply;
+        }
 
         case /(^[.]ch$)/i.test(mainMsg[0]) && /^set$/i.test(mainMsg[1]) && /^\S+$/i.test(mainMsg[2]) && /^\S+$/i.test(mainMsg[3]):
             //更新功能
@@ -429,7 +463,7 @@ var rollDiceCommand = async function ({
                         return rply;
                     }
                 } catch (error) {
-                    console.error('doc ', doc)
+                    console.error('doc error', doc)
                     console.error('inputSTR: ', inputStr)
                     console.error('doc SAVE  GET ERROR:', error)
                     console.error('更新角色卡失敗: ', error)
@@ -484,7 +518,32 @@ var rollDiceCommand = async function ({
             }
             rply.text = await showCharacter(doc, 'showAllMode');
             return rply;
+        case /(^[.]ch$)/i.test(mainMsg[0]) && /^button$/i.test(mainMsg[1]): {
+            if (!groupid) {
+                rply.text = '此功能必須在群組中使用'
+                return rply
+            }
+            if (botname !== "Discord") {
+                rply.text = "這是Discord限定功能"
+                return rply;
+            }
+            const filter = {
+                id: userid,
+                gpid: channelid || groupid,
+            }
 
+            const docSwitch = await schema.characterGpSwitch.findOne(
+                filter);
+            if (docSwitch && docSwitch.cardId) {
+                const doc = await schema.characterCard.findOne({
+                    _id: docSwitch.cardId
+                });
+                if (doc.roll)
+                    rply.requestRollingCharacter = [handleRequestRollingChMode(doc), doc.name, 'ch']
+            }
+            //  rply.requestRolling = handleRequestRolling(inputStr)
+            return rply;
+        }
 
         case /(^[.]ch$)/i.test(mainMsg[0]) && /^\S+$/i.test(mainMsg[1]):
             if (!groupid) {
@@ -522,11 +581,33 @@ var rollDiceCommand = async function ({
             rply = Object.assign({}, rply, tempMain)
             rply.characterName = doc.name;
             return rply;
-
         default:
             break;
 
     }
+}
+function handleRequestRolling(doc) {
+    const rolls = doc.roll;
+    let text = [];
+    for (let index = 0; index < rolls.length; index++) {
+        const roll = rolls[index];
+        const itemName = new RegExp(convertRegex(roll.name) + '$', 'i')
+        text[index] = (roll.itemA.match(itemName)) ? `${roll.itemA}` : `${roll.itemA} ${roll.name}`
+        text[index] = text[index].substring(0, 80);
+    }
+    text.push = `.ch use ${doc.name}`
+    return text;
+}
+
+function handleRequestRollingChMode(doc) {
+    const rolls = doc.roll;
+    let text = [];
+    for (let index = 0; index < rolls.length; index++) {
+        const roll = rolls[index];
+        text[index] = `.ch ${roll.name}`
+        text[index] = text[index].substring(0, 80);
+    }
+    return text;
 }
 
 async function mainCharacter(doc, mainMsg) {
@@ -598,7 +679,7 @@ async function mainCharacter(doc, mainMsg) {
                             doc.state[index].itemA = findState[i + 1];
                         } else {
                             try {
-                                let num = eval(new String(doc.state[index].itemA) + findState[i + 1].replace('--', '-'));
+                                let num = mathjs.evaluate(new String(doc.state[index].itemA) + findState[i + 1].replace('--', '-'));
                                 if (!isNaN(num)) {
                                     doc.state[index].itemA = num;
                                 }
@@ -855,7 +936,7 @@ async function replaceAsync(str, regex, asyncFn) {
 async function myAsyncFn2(match, p1) {
     let result = ''
     try {
-        result = eval(p1)
+        result = mathjs.evaluate(p1)
     } catch (error) {
         result = p1
     }

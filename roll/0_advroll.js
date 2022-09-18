@@ -1,17 +1,18 @@
 "use strict";
 const rollbase = require('./rollbase.js');
 const mathjs = require('mathjs');
-var variables = {};
+const { SlashCommandBuilder } = require('@discordjs/builders');
+const variables = {};
 const regexxBy = /^((\d+)(b)(\d+))(S?)/i
 const regexxUy = /^(\d+)(u)(\d+)/i
-var gameName = function () {
+const gameName = function () {
 	return '【進階擲骰】 .ca (計算)|D66(sn)|5B10 Dx|5U10 x y|.int x y'
 }
 
-var gameType = function () {
+const gameType = function () {
 	return 'Dice:advRoll'
 }
-var prefixs = function () {
+const prefixs = function () {
 	return [{
 		first: /^[.][c][a]$/i,
 		second: null
@@ -34,7 +35,7 @@ var prefixs = function () {
 	}
 	]
 }
-var getHelpMessage = function () {
+const getHelpMessage = function () {
 	return `【進階擲骰】
 
 【數學計算】.ca： (不支援擲骰) 
@@ -56,11 +57,11 @@ D66 D66s D66n：	骰出D66 s數字小在前 n大在前
 `
 }
 
-var initialize = function () {
+const initialize = function () {
 	return variables;
 }
 
-var rollDiceCommand = async function ({
+const rollDiceCommand = async function ({
 	inputStr,
 	mainMsg,
 	botname
@@ -86,7 +87,7 @@ var rollDiceCommand = async function ({
 			try {
 				rply.text = mathjs.evaluate(inputStr.toLowerCase().replace(/\.ca/i, '').replace(/磅/g, 'lb').replace(/公斤/g, 'kg').replace(/盎司/g, 'oz').replace(/英吋/g, 'inch').replace(/公分/g, 'cm').replace(/公釐/g, 'mm').replace(/克/g, 'g').replace(/公尺/g, 'm').replace(/碼/g, 'yd').replace(/桿/g, 'rd').replace(/英里/g, 'mi').replace(/千米/g, 'km').replace(/厘米/g, 'cm').replace(/毫米/g, 'mm').replace(/微米/g, 'µm').replace(/毫克/g, 'mg').replace(/公克/g, 'hg').replace(/斤/g, 'kg').replace(/米/g, 'm').replace(/英尺/g, 'ft').replace(/尺/g, 'ft').replace(/角度/g, 'deg').replace(/度/g, 'deg').replace(/呎/g, 'ft').replace(/吋/g, 'inch').replace(/轉換/g, ' to ').replace(/轉/g, ' to ').replace(/換/g, ' to ').replace(/√/g, 'sqrt').replace(/π/g, 'pi'));
 			} catch (error) {
-				console.error('.ca ERROR FUNCTION', inputStr, error.message);
+				//console.error('.ca ERROR FUNCTION', inputStr, error.message);
 				rply.text = inputStr.replace(/\.ca\s+/i, '') + '\n→ ' + error.message;
 				rply.text += `\n注: 本功能只為進行數學計算,不支援擲骰。
 				例如: .ca 1.2 * (2 + 4.5) ， 12.7 米 to inch 
@@ -108,7 +109,6 @@ var rollDiceCommand = async function ({
 		case regexxBy.test(mainMsg[0]): {
 			matchxby = regexxBy.exec(mainMsg[0]);
 			//判斷式 0:"5b10<=80" 1:"5b10" 2:"5" 3:"b" 4:"10" 5:"<=80" 6:"<=" 	7:"<" 8:"=" 	9:"80"
-			//console.log('match', match)
 			let sortMode = (matchxby[5]) ? true : false;
 			if (matchxby && matchxby[4] > 1 && matchxby[4] < 10000 && matchxby[2] > 0 && matchxby[2] <= 600)
 				rply.text = xBy(mainMsg[0].replace(/S/i, ""), mainMsg[1], mainMsg[2], sortMode, botname);
@@ -127,15 +127,48 @@ var rollDiceCommand = async function ({
 			break;
 	}
 }
+//name execute
+const discordCommand = [
+	{
+		data: new SlashCommandBuilder()
+			.setName('ca')
+			.setDescription('【數學計算】 (不支援擲骰) ')
+			.addStringOption(option => option.setName('text').setDescription('輸入內容').setRequired(true)),
+		async execute(interaction) {
+			const text = interaction.options.getString('text')
+			if (text !== null)
+				return `.ca ${text}`
+			else return `需要輸入內容\n 如 .ca 1.2 * (2 + 4.5) ， 12.7 米 to inch 
+			sin(45 deg) ^ 2  5磅轉斤 10米轉呎 10米=吋`
 
+		}
+	},
+	{
+		data: new SlashCommandBuilder()
+			.setName('int')
+			.setDescription('int 20 50: 立即骰出20-50')
+			.addStringOption(option => option.setName('minnum').setDescription('輸入第一個數字').setRequired(true))
+			.addStringOption(option => option.setName('maxnum').setDescription('輸入第二個數字').setRequired(true))
+		,
+		async execute(interaction) {
+			const minNum = interaction.options.getString('minnum')
+			const maxNum = interaction.options.getString('maxnum');
+			if (minNum !== null && maxNum !== null)
+				return `.int ${minNum} ${maxNum}`
+			else return `需要輸入兩個數字\n 如 .int 20 50`
+
+		}
+	}
+];
 
 module.exports = {
-	rollDiceCommand: rollDiceCommand,
-	initialize: initialize,
-	getHelpMessage: getHelpMessage,
-	prefixs: prefixs,
-	gameType: gameType,
-	gameName: gameName
+	rollDiceCommand,
+	initialize,
+	getHelpMessage,
+	prefixs,
+	gameType,
+	gameName,
+	discordCommand
 };
 /*
  \n D66 D66s：	骰出D66 s小者固定在前\
@@ -194,7 +227,6 @@ function d66n(text) {
  *  xBy Dz   成功數1
  */
 function xBy(triggermsg, text01, text02, sortMode, botname) {
-	//console.log('xBy', triggermsg, text01, text02, sortMode, botname)
 	let regex2 = /(([<]|[>])(|[=]))(\d+.*)/i;
 
 	let temptriggermsg = triggermsg;
@@ -219,7 +251,6 @@ function xBy(triggermsg, text01, text02, sortMode, botname) {
 	}
 
 	let match01 = /^((|d)(\d+))$/i.exec(text01);
-	//console.log('match01', match01)
 	//判斷式 0:"d5"  1:"d5" 2:"d" 3:"5" 
 	let text = "";
 	if (text01) text = text01;
@@ -244,8 +275,6 @@ function xBy(triggermsg, text01, text02, sortMode, botname) {
 		if (text02) text = text02;
 	}
 	let returnStr = '(' + triggermsg + ')';
-	//console.log(match)
-	//	console.log(match01)
 	let varcou = new Array();
 	let varsu = 0;
 	for (let i = 0; i < Number(match[2]); i++) {
@@ -254,7 +283,6 @@ function xBy(triggermsg, text01, text02, sortMode, botname) {
 	if (sortMode) {
 		varcou.sort((a, b) => b - a);
 	}
-	//	console.log(varcou)
 	//varcou.sort(rollbase.sortNumber);
 	//(5B7>6) → 7,5,6,4,4 → 
 
@@ -263,7 +291,6 @@ function xBy(triggermsg, text01, text02, sortMode, botname) {
 			case (match[7] == "<" && !match[8]):
 				if (varcou[i] < match[9]) { varsu++; }
 				else {
-					//console.log('01: ', varcou[i])
 					varcou[i] = strikeThrough(varcou[i], botname);
 				}
 				break;
@@ -272,7 +299,6 @@ function xBy(triggermsg, text01, text02, sortMode, botname) {
 					varsu++;
 				}
 				else {
-					//	console.log('02: ', varcou[i])
 					varcou[i] = strikeThrough(varcou[i], botname);
 				}
 				break;
@@ -281,7 +307,6 @@ function xBy(triggermsg, text01, text02, sortMode, botname) {
 					varsu++;
 				}
 				else {
-					//	console.log('03: ', varcou[i])
 					varcou[i] = strikeThrough(varcou[i], botname);
 				}
 				break;
@@ -290,7 +315,6 @@ function xBy(triggermsg, text01, text02, sortMode, botname) {
 					varsu++;
 				}
 				else {
-					//	console.log('04: ', varcou[i])
 					varcou[i] = strikeThrough(varcou[i], botname);
 				}
 				break;
@@ -299,8 +323,6 @@ function xBy(triggermsg, text01, text02, sortMode, botname) {
 					varsu++;
 				}
 				else {
-					//	console.log('05: ', varcou[i])
-					//	console.log('match[7]: ', match[7])
 					varcou[i] = strikeThrough(varcou[i], botname);
 				}
 				break;

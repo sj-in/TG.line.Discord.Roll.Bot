@@ -4,29 +4,35 @@ const {
   Random,
   nodeCrypto
 } = require("random-js");
+const { DiceRoller, DiceRoll } = require('@dice-roller/rpg-dice-roller');
 const random = new Random(nodeCrypto);
+const { SlashCommandBuilder } = require('@discordjs/builders');
 //value = random.integer(1, 100);
-const regex = /(\d+)d(\d+)(kh|kl|dh|dl|k|)(\d+|)/i;
+const BASIC_ROLL_REGEX = /(\d+)d(\d+)(kh|kl|dh|dl|k|)(\d+|)/i;
 //var Sided = [];
 //Sided[10000] = [];
-var variables = {};
+const variables = {};
 
-var gameName = function () {
-  return '基本擲骰'
+const gameName = function () {
+  return '【基本擲骰】.z xDy kl dh'
 }
 
-var gameType = function () {
+const gameType = function () {
   return 'dice:rollbase:hktrpg'
 }
-var prefixs = function () {
-  const tempregex = /^(?=.*\d+d\d+)(?!.*\d+(l|h))(?!.*(k)$)(?!.*(l|h)(l|h|k|d))(?!.*(k|d)(k|d))(?!.*^[a-z])(?!.*[a-c])(?!.*[e-g])(?!.*[i-j])(?!.*[m-z])(?!.*(([d]|[+]|[-]|[*]|[/])([d]|[+]|[-]|[*]|[/])))(?!.*(^([d]|[+]|[-]|[*]|[/]|[<]|[>]|[=]|[)])))(?!.*([(][)]))(?!.*([<][<]))(?!.*([>][>]))(?!.*([<][>]))(?!.*([>][<]))(?!.*(\d+[d]+\d+[d]([^h|l]))|([)]\d))(?!.*(([d]|[+]|[-]|[*]|[/]|[<]|[>]|[=]|[(])$))(?!.*([@]|[!]|[#]|[$]|[%]|[&]|[_]|[~]|[`]|[']|[?]|\.))(?!.*([\u4e00-\u9fa5]))(?!.*([=].*[=]))(?!.*([+]|[-]|[*]|[/])[=])(?!.*[=]([+]|[-]|[*]|[/]|[>]|[<]))(?!.*(\d)[=](\d))(?!.*([-][>])|([-][<])|([<][-])|([>][-]))(?!.*(d)[(]).*$/ig
+const TEMP_REGEX = /^(?=.*\d+d\d+)(?!.*\d+(l|h))(?!.*(k)$)(?!.*(l|h)(l|h|k|d))(?!.*(k|d)(k|d))(?!.*^[a-z])(?!.*[a-c])(?!.*[e-g])(?!.*[i-j])(?!.*[m-z])(?!.*(([d]|[+]|[-]|[*]|[/])([d]|[+]|[-]|[*]|[/])))(?!.*(^([d]|[+]|[-]|[*]|[/]|[<]|[>]|[=]|[)])))(?!.*([(][)]))(?!.*([<][<]))(?!.*([>][>]))(?!.*([<][>]))(?!.*([>][<]))(?!.*(\d+[d]+\d+[d]([^h|l]))|([)]\d))(?!.*(([d]|[+]|[-]|[*]|[/]|[<]|[>]|[=]|[(])$))(?!.*([@]|[!]|[#]|[$]|[%]|[&]|[_]|[~]|[`]|[']|[?]|\.))(?!.*([\u4e00-\u9fa5]))(?!.*([=].*[=]))(?!.*([+]|[-]|[*]|[/])[=])(?!.*[=]([+]|[-]|[*]|[/]|[>]|[<]))(?!.*(\d)[=](\d))(?!.*([-][>])|([-][<])|([<][-])|([>][-]))(?!.*(d)[(]).*$/ig
+const prefixs = function () {
   return [{
-    first: tempregex,
+    first: TEMP_REGEX,
     second: null
   },
   {
     first: /(^[1-9]$)|(^[1-2][0-9]$)|(^[3][0]$)/i,
-    second: tempregex
+    second: TEMP_REGEX
+  },
+  {
+    first: /^.rr$/i,
+    second: null
   }
   ]
 }
@@ -42,26 +48,46 @@ const getHelpMessage = function () {
 5 3D6 ：	分別骰出5次3d6 最多30次
 ((2d6+1)*2)-5/2>=10 支援括號加減乘除及大於小於(>,<,>=,<=)計算
 支援kh|kl|dh|dl，k keep保留，d drop 放棄，h highest最高，l lowest最低
-如3d6kh 保留最大的1粒骰，3d6dl2 放棄最小的2粒骰`
+如3d6kh 保留最大的1粒骰，3d6dl2 放棄最小的2粒骰
+
+`
 }
-var initialize = function () {
+const initialize = function () {
   return variables;
 }
 
 const rollDiceCommand = function ({
-  mainMsg
+  mainMsg,
+  inputStr
 }) {
   let rply = {
     default: 'on',
     type: 'text',
     text: ''
   };
-  try {
-    rply.text = nomalDiceRoller(mainMsg[0], mainMsg[1], mainMsg[2]);
-  } catch (error) {
-    rply.text = '';
+  switch (true) {
+    case /^\.rr$/i.test(mainMsg[0]):
+      {
+        try {
+          const roll = new DiceRoll(inputStr.replace(/^[.]rr\s+/i, ''));
+          rply.text = roll.output;
+        } catch (err) {
+          rply.text += `${err.name}  \n ${err.message}`;
+          rply.text += `\n 擲骰說明 https://dice-roller.github.io/documentation/guide/notation/dice.html#standard-d-n`
+        }
+
+        return rply;
+      }
+
+    default:
+      try {
+        rply.text = nomalDiceRoller(mainMsg[0], mainMsg[1], mainMsg[2]);
+        return rply;
+      } catch (error) {
+        return rply;
+      }
   }
-  return rply;
+
 }
 
 
@@ -71,13 +97,13 @@ const rollDiceCommand = function ({
  * @param {純數字, 10即骰出1D100} diceSided 
  */
 
-var Dice = function (diceSided) {
+const Dice = function (diceSided) {
   let result = '';
   result = random.integer(1, Math.floor(diceSided))
   return result
 }
 
-var DiceINT = function (start, end) {
+const DiceINT = function (start, end) {
   let result = '';
   let points = [Math.floor(start), Math.floor(end)]
   points.sort(function (a, b) {
@@ -87,11 +113,11 @@ var DiceINT = function (start, end) {
   return result
 }
 
-var sortNumber = function (a, b) {
+const sortNumber = function (a, b) {
   return a - b
 }
 
-var RollDice = function (inputStr) {
+const RollDice = function (inputStr) {
   // 先把inputStr變成字串（不知道為什麼非這樣不可）
   //kh kl dh dl
   //kh or khN Keeps highest N
@@ -164,11 +190,11 @@ var RollDice = function (inputStr) {
   return finalStr
 }
 
-var FunnyDice = function (diceSided) {
+const FunnyDice = function (diceSided) {
   return random.integer(0, Math.floor(diceSided)) // 猜拳，從0開始
 }
 
-var BuildDiceCal = function (inputStr) {
+const BuildDiceCal = function (inputStr) {
   // 首先判斷是否是誤啟動（檢查是否有符合骰子格式）
   if (inputStr.toLowerCase().match(/\d+d\d+/i) == null) return undefined
   // 排除小數點
@@ -196,11 +222,11 @@ var BuildDiceCal = function (inputStr) {
   return finalStr
 }
 
-var shuffleTarget = function (target) {
+const shuffleTarget = function (target) {
   return random.shuffle(target)
 }
 
-var BuildRollDice = function (inputStr) {
+const BuildRollDice = function (inputStr) {
   // 先把inputStr變成字串（不知道為什麼非這樣不可）
   let comStr = inputStr.toString().toLowerCase()
   let finalStr = '('
@@ -218,7 +244,7 @@ var BuildRollDice = function (inputStr) {
  * @param {文字描述 || 1D100} text1 
  * @param {文字描述} text2 
  */
-var nomalDiceRoller = function (text0, text1, text2) {
+const nomalDiceRoller = function (text0, text1, text2) {
   // 首先判斷是否是誤啟動（檢查是否有符合骰子格式）
   // if (inputStr.toLowerCase().match(/\d+d\d+/) == null) return undefined
   // 再來先把第一個分段拆出來，待會判斷是否是複數擲骰
@@ -259,12 +285,12 @@ function onetimeroll(text0) {
     let Str = ''
     // 寫出算式
     let equation = text0
-    while (equation.match(regex) != null) {
+    while (equation.match(BASIC_ROLL_REGEX) != null) {
       // let totally = 0
-      let tempMatch = equation.match(regex)
+      let tempMatch = equation.match(BASIC_ROLL_REGEX)
       if (tempMatch[1] > 1000 || tempMatch[1] <= 0) return '不支援零顆以下及一千顆骰以上'
       if (tempMatch[2] < 1 || tempMatch[2] > 9000000000000000) return '不支援一以下及九千兆以上'
-      equation = equation.replace(regex, RollDice(tempMatch))
+      equation = equation.replace(BASIC_ROLL_REGEX, RollDice(tempMatch))
     }
     // 計算算式
     let aaa = equation
@@ -281,6 +307,18 @@ function onetimeroll(text0) {
     return '';
   }
 }
+const discordCommand = [
+  {
+    data: new SlashCommandBuilder()
+      .setName('hk')
+      .setDescription('最基本指令模式')
+      .addStringOption(option => option.setName('text').setDescription('輸入平日的HKTRPG文字指令').setRequired(true)),
+    async execute(interaction) {
+      const text = interaction.options.getString('text')
+      return `${text}`
+    }
+  }
+];
 module.exports = {
   Dice: Dice,
   sortNumber: sortNumber,
@@ -295,5 +333,6 @@ module.exports = {
   getHelpMessage: getHelpMessage,
   prefixs: prefixs,
   gameType: gameType,
-  gameName: gameName
+  gameName: gameName,
+  discordCommand
 };

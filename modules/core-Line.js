@@ -2,11 +2,15 @@
 if (!process.env.LINE_CHANNEL_ACCESSTOKEN) {
 	return;
 }
+const port = 20831;
+const mainLine = (process.env.DISCORD_CHANNEL_SECRET) ? false : true;
+const lineAgenda = (process.env.LINE_AGENDA) ? true : false;
 exports.analytics = require('./analytics');
 const EXPUP = require('./level').EXPUP || function () { };
 const line = require('@line/bot-sdk');
 const express = require('express');
-const msgSplitor = (/\S+/ig);
+const MESSAGE_SPLITOR = (/\S+/ig);
+const SIX_MONTH = 30 * 24 * 60 * 60 * 1000 * 6;
 const agenda = require('../modules/schedule');
 const rollText = require('./getRoll').rollText;
 exports.z_stop = require('../roll/z_stop');
@@ -38,25 +42,32 @@ app.post('/', line.middleware(config), (req, res) => {
 });
 // event handler
 process.on("Line", message => {
-	if (!message.text) return;
+	if (!message.text || !mainLine) return;
 	SendToId(message.target.id, message.text);
 	return;
 });
 
 var handleEvent = async function (event) {
+
 	let inputStr = (event.message && event.message.text) ? event.message.text : "";
+
 	let trigger = "";
 	let roomorgroupid = event.source.groupId || event.source.roomId || '';
-	let mainMsg = (inputStr) ? inputStr.match(msgSplitor) : {}; //定義輸入字串
+	let mainMsg = (inputStr) ? inputStr.match(MESSAGE_SPLITOR) : {}; //定義輸入字串
 	if (mainMsg && mainMsg[0]) {
 		trigger = mainMsg[0].toString().toLowerCase();
 	}
 	//指定啟動詞在第一個詞&把大階強制轉成細階
-	if (trigger == ".me" && !z_stop(mainMsg, roomorgroupid)) {
-		inputStr = inputStr.replace(/^.me\s+/i, '');
+	if ((trigger == ".me" || trigger == ".mee") && !z_stop(mainMsg, roomorgroupid)) {
+		inputStr = inputStr.replace(/^\.mee\s*/i, ' ').replace(/^\.me\s*/i, ' ');
+		if (inputStr.match(/^\s+$/)) {
+			inputStr = `.me 或 /mee 可以令HKTRPG機械人重覆你的說話\n請輸入復述內容`
+		}
 		if (roomorgroupid) {
 			let temp = HandleMessage(inputStr);
-			client.replyMessage(event.replyToken, temp);
+			client.replyMessage(event.replyToken, temp).catch((err) => {
+				console.error('#60 line err', err.statusCode);
+			});
 		} else {
 			SendToId(event.source.userId, inputStr);
 		}
@@ -82,13 +93,13 @@ var handleEvent = async function (event) {
 		if (event.type == "join" && roomorgroupid) {
 			// 新加入群組時, 傳送MESSAGE
 			console.log("Line joined");
-			await replyMessagebyReplyToken(event, newMessage.joinMessage());
+			replyMessagebyReplyToken(event, newMessage.joinMessage());
 		}
 		await nonDice(event);
 		return Promise.resolve(null);
 	}
 	let target = '';
-	if (inputStr) target = await exports.analytics.findRollList(inputStr.match(msgSplitor));
+	if (inputStr) target = await exports.analytics.findRollList(inputStr.match(MESSAGE_SPLITOR));
 	if (!target) {
 		await nonDice(event);
 		return null;
@@ -145,7 +156,6 @@ var handleEvent = async function (event) {
 				displayname: displayname,
 				titleName: titleName
 			});
-			//console.log('channelKeyword', rplyVal)
 		}
 
 	}
@@ -160,7 +170,6 @@ var handleEvent = async function (event) {
 
 
 	if (roomorgroupid && rplyVal && rplyVal.LevelUp) {
-		//	console.log('result.LevelUp 2:', rplyVal.LevelUp)
 		if (displayname) {
 			rplyVal.text = rplyVal.LevelUp + '\n' + rplyVal.text;
 			//await SendToId(roomorgroupid, "@" + displayname + ' \n' + rplyVal.LevelUp
@@ -188,9 +197,9 @@ var handleEvent = async function (event) {
 			// 輸入dr  (指令) 私訊自己
 			if (roomorgroupid && userid)
 				if (displayname)
-					await replyMessagebyReplyToken(event, "@" + displayname + ' 暗骰給自己');
+					replyMessagebyReplyToken(event, "@" + displayname + ' 暗骰給自己');
 				else
-					await replyMessagebyReplyToken(event, '正在暗骰給自己');
+					replyMessagebyReplyToken(event, '正在暗骰給自己');
 			if (userid)
 				if (displayname)
 					SendToId(userid, "@" + displayname + '的暗骰\n' + rplyVal.text);
@@ -206,9 +215,9 @@ var handleEvent = async function (event) {
 					targetGMNameTemp = targetGMNameTemp + ", " + (TargetGMTempdiyName[i] || "@" + TargetGMTempdisplayname[i]);
 				}
 				if (displayname) {
-					await replyMessagebyReplyToken(event, "@" + displayname + ' 暗骰進行中 \n目標: 自己 ' + targetGMNameTemp);
+					replyMessagebyReplyToken(event, "@" + displayname + ' 暗骰進行中 \n目標: 自己 ' + targetGMNameTemp);
 				} else
-					await replyMessagebyReplyToken(event, ' 暗骰進行中 \n目標: 自己 ' + targetGMNameTemp);
+					replyMessagebyReplyToken(event, ' 暗骰進行中 \n目標: 自己 ' + targetGMNameTemp);
 			}
 
 			//有名字就顯示
@@ -232,9 +241,9 @@ var handleEvent = async function (event) {
 					targetGMNameTemp = targetGMNameTemp + " " + (TargetGMTempdiyName[i] || "@" + TargetGMTempdisplayname[i])
 				}
 				if (displayname) {
-					await replyMessagebyReplyToken(event, "@" + displayname + ' 暗骰進行中 \n目標: ' + targetGMNameTemp)
+					replyMessagebyReplyToken(event, "@" + displayname + ' 暗骰進行中 \n目標: ' + targetGMNameTemp)
 				} else {
-					await replyMessagebyReplyToken(event, ' 暗骰進行中 \n目標: ' + targetGMNameTemp)
+					replyMessagebyReplyToken(event, ' 暗骰進行中 \n目標: ' + targetGMNameTemp)
 				}
 			}
 			if (displayname)
@@ -250,11 +259,10 @@ var handleEvent = async function (event) {
 				displayname += (rplyVal.statue) ? ' ' + rplyVal.statue + '\n' : "\n";
 				rplyVal.text = displayname + rplyVal.text;
 			}
-			//	console.log('rplyVal: ', rplyVal)
 			if (roomorgroupid) {
-				return await replyMessagebyReplyToken(event, rplyVal);
+				return replyMessagebyReplyToken(event, rplyVal);
 			} else if (userid) {
-				return await replyMessagebyReplyToken(event, rplyVal);
+				return replyMessagebyReplyToken(event, rplyVal);
 			}
 			break;
 	}
@@ -278,19 +286,24 @@ var handleEvent = async function (event) {
 	//Reply Max: 2000 characters
 
 }
-var replyMessagebyReplyToken = async function (event, Reply) {
+var replyMessagebyReplyToken = function (event, Reply) {
 	let temp = HandleMessage(Reply);
-	return await client.replyMessage(event.replyToken, temp).catch(() => {
+	return client.replyMessage(event.replyToken, temp).catch(() => {
 		if (temp.type == 'image') {
 			let tempB = {
 				type: 'text',
 				text: temp.originalContentUrl
 			};
-			client.replyMessage(event.replyToken, tempB);
+			client.replyMessage(event.replyToken, tempB).catch((err) => {
+				console.error('#292 line err', err.statusCode);
+			});
 			//	}
 		}
 	});
+
+
 }
+
 function HandleMessage(message) {
 	let temp = [];
 	switch (true) {
@@ -333,22 +346,41 @@ function HandleMessage(message) {
 	}
 }
 // listen on port
-/*	app.listen(port, () => {
-		console.log(`Line BOT listening on ${port}`);
-	});
+const privateKey = (process.env.KEY_PRIKEY) ? process.env.KEY_PRIKEY : null;
+const certificate = (process.env.KEY_CERT) ? process.env.KEY_CERT : null;
+const ca = (process.env.KEY_CA) ? process.env.KEY_CA : null;
+const fs = require('fs');
+let options = {};
+async function read() {
+	if (!privateKey) return;
+	try {
+		options = {
+			key: (fs.readFileSync(privateKey)) ? fs.readFileSync(privateKey) : null,
+			cert: (fs.readFileSync(certificate)) ? fs.readFileSync(certificate) : null,
+			ca: (fs.readFileSync(ca)) ? fs.readFileSync(ca) : null
+		};
+	} catch (error) {
+		console.error(error, 'error of key')
+	}
+}
 
-	app.get('/aa', function (req, res) {
-		//	res.send(parseInput(req.query.input));
-		res.send('Hello');
-	});
-*/
+(async () => {
+	await read()
+})();
+require('https').createServer(options, app).listen(port, () => {
+	console.log(`Line BOT listening on ${port}`);
+});
+
+
+
+
 
 async function sendNewstoAll(rply) {
 	for (let index = 0; index < rply.target.length; index++) {
 		SendToId(rply.target[index].userID, rply.sendNews);
 	}
 }
-if (agenda && agenda.agenda) {
+if (agenda && agenda.agenda && lineAgenda) {
 	agenda.agenda.define("scheduleAtMessageLine", async (job) => {
 		//指定時間一次	
 		let data = job.attrs.data;
@@ -373,7 +405,7 @@ if (agenda && agenda.agenda) {
 			data.groupid, text
 		)
 		try {
-			if ((new Date(Date.now()) - data.createAt) >= 30 * 24 * 60 * 60 * 1000 * 6) {
+			if ((new Date(Date.now()) - data.createAt) >= SIX_MONTH) {
 				await job.remove();
 				SendToId(
 					data.groupid, "已運行六個月, 移除此定時訊息"
@@ -388,16 +420,18 @@ if (agenda && agenda.agenda) {
 
 app.on('UnhandledPromiseRejection', error => {
 	// Will print "unhandledRejection err is not defined"
-	console.error('UnhandledPromiseRejection: ', error.message);
+	console.error('Line UnhandledPromiseRejection: ', error.message);
 });
 app.on('unhandledRejection', error => {
 	// Will print "unhandledRejection err is not defined"
-	console.error('unhandledRejection: ', error.message);
+	console.error('Line unhandledRejection: ', error.message);
 });
 function SendToId(targetid, Reply) {
 	let temp = HandleMessage(Reply);
-	//console.log('SendToId: ', temp)
-	return client.pushMessage(targetid, temp);
+	client.pushMessage(targetid, temp).catch((err) => {
+		if (err.statusCode == 429) return
+		console.error('#409 line err', err.statusCode, temp);
+	});
 }
 async function privateMsgFinder(channelid) {
 	if (!TargetGM || !TargetGM.trpgDarkRollingfunction) return;
@@ -420,10 +454,9 @@ async function nonDice(event) {
 	if (profile && profile.displayName) {
 		displayname = profile.displayName;
 	}
-	//console.log(displayname)
 	let LevelUp = await EXPUP(roomorgroupid, userid, displayname, "", null);
 	if (roomorgroupid && LevelUp && LevelUp.text) {
-		return await replyMessagebyReplyToken(event, LevelUp.text);
+		return replyMessagebyReplyToken(event, LevelUp.text);
 	}
 	//如果對方沒加朋友,會出現 UnhandledPromiseRejectionWarning, 就跳到這裡
 
@@ -431,7 +464,7 @@ async function nonDice(event) {
 }
 
 function z_stop(mainMsg, groupid) {
-	if (!Object.keys(exports.z_stop).length || !exports.z_stop.initialize().save) {
+	if (!Object.keys(exports.z_stop).length || !exports.z_stop.initialize().save || !mainMsg || !groupid) {
 		return false;
 	}
 	let groupInfo = exports.z_stop.initialize().save.find(e => e.groupid == groupid)

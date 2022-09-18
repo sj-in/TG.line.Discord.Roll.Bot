@@ -1,8 +1,13 @@
 "use strict";
+if (!process.env.DISCORD_CHANNEL_SECRET) {
+    return;
+}
 var variables = {};
 const oneMinuts = (process.env.DEBUG) ? 1 : 60000;
 const sevenDay = (process.env.DEBUG) ? 1 : 60 * 24 * 7 * 60000;
-var gameName = function () {
+const checkTools = require('../modules/check.js');
+
+const gameName = function () {
     return '【Discord 頻道輸出工具】'
 }
 const opt = {
@@ -10,7 +15,7 @@ const opt = {
     runValidators: true
 }
 const VIP = require('../modules/veryImportantPerson');
-const limitArr = (process.env.DEBUG) ? [99, 99, 99, 40, 40, 99, 99, 99] : [2, 20, 40, 40, 40, 99, 99, 99];
+const FUNCTION_LIMIT = (process.env.DEBUG) ? [99, 99, 99, 40, 40, 99, 99, 99] : [2, 20, 40, 40, 40, 99, 99, 99];
 /**
  * 因為資源限制，
  * 每個guild 5分鐘可以使用一次,
@@ -25,17 +30,17 @@ const schema = require('../modules/schema.js');
 const fs = require('fs').promises;
 const moment = require('moment-timezone');
 const CryptoJS = require("crypto-js");
-var gameType = function () {
+const gameType = function () {
     return 'Tool:Export:hktrpg'
 }
 const dir = __dirname + '/../tmp/';
-var prefixs = function () {
+const prefixs = function () {
     return [{
         first: /^[.]discord$/i,
         second: null
     }]
 }
-var getHelpMessage = async function () {
+const getHelpMessage = async function () {
     return `測試進行中【聊天紀錄】
 .discord html 可以輸出有分析功能的聊天紀錄
 .discord txt 可以輸出純文字的聊天紀錄
@@ -55,11 +60,11 @@ var getHelpMessage = async function () {
 
 另外這是開發團錄功能的副產品，團錄功能敬請期待(?)`
 }
-var initialize = function () {
+const initialize = function () {
     return variables;
 }
 
-var rollDiceCommand = async function ({
+const rollDiceCommand = async function ({
     inputStr,
     mainMsg,
     discordClient,
@@ -96,7 +101,7 @@ var rollDiceCommand = async function ({
     }
 
     function replacer(first, second) {
-        let users = discordClient.users.cache.get(second);
+        let users = discordClient.users.fetch(second);
         if (users && users.username) {
             return '@' + users.username;
         } else return first;
@@ -227,7 +232,7 @@ var rollDiceCommand = async function ({
                 return rply;
             }
             lv = await VIP.viplevelCheckUser(userid);
-            limit = limitArr[lv];
+            limit = FUNCTION_LIMIT[lv];
             checkUser = await schema.exportUser.findOne({
                 userID: userid
             });
@@ -256,8 +261,7 @@ var rollDiceCommand = async function ({
                 冷卻剩餘 ${millisToMinutesAndSeconds(userRemainingTime)} 時間，
                 現在正處於Demo模式，可以輸出500條信息。
 
-                支援及解鎖上限 https://www.patreon.com/HKTRPG\n或自組服務器
-                源代碼  http://bit.ly/HKTRPG_GITHUB`;
+                支援及解鎖上限 https://www.patreon.com/HKTRPG`;
                 demoMode = true;
             }
             /**
@@ -344,35 +348,31 @@ var rollDiceCommand = async function ({
             你的channel 聊天紀錄 共有 ${totalSize} 項`
             return rply;
         case /^txt$/i.test(mainMsg[1]): {
-            if (!channelid || !groupid) {
-                rply.text = "這是頻道功能，需要在頻道上使用。"
+            if (rply.text = checkTools.permissionErrMsg({
+                flag: checkTools.flag.ChkBot,
+                gid: groupid,
+                role: userrole,
+                name: botname
+            })) {
                 return rply;
             }
+
             if (!hasReadPermission) {
                 rply.text = `HKTRPG沒有相關權限，禁止使用這功能。
                 HKTRPG需要有查看此頻道對話歷史的權限。`
-                return rply;
-            }
-            if (userrole < 2) {
-                rply.text = `你沒有相關權限，禁止使用這功能。
-                你需要有管理此頻道的權限或管理員權限。`
-                return rply;
-            }
-            if (botname !== "Discord") {
-                rply.text = "這是Discord限定功能"
                 return rply;
             }
 
             lv = await VIP.viplevelCheckUser(userid);
             let gpLv = await VIP.viplevelCheckGroup(groupid);
             lv = (gpLv > lv) ? gpLv : lv;
-            limit = limitArr[lv];
+            limit = FUNCTION_LIMIT[lv];
             checkUser = await schema.exportUser.findOne({
                 userID: userid
-            });
+            }).catch(error => console.error('export #372 mongoDB error: ', error.name, error.reson));
             checkGP = await schema.exportGp.findOne({
                 groupID: userid
-            });
+            }).catch(error => console.error('export #375 mongoDB error: ', error.name, error.reson));
             gpLimitTime = (lv > 0) ? oneMinuts : oneMinuts * 20;
             gpRemainingTime = (checkGP) ? theTime - checkGP.lastActiveAt - gpLimitTime : 1;
             userRemainingTime = (checkUser) ? theTime - checkUser.lastActiveAt - sevenDay : 1;
@@ -394,9 +394,7 @@ var rollDiceCommand = async function ({
                 冷卻剩餘 ${millisToMinutesAndSeconds(userRemainingTime)} 時間，
                 現在正處於Demo模式，可以輸出500條信息，
                 
-                支援及解鎖上限 https://www.patreon.com/HKTRPG
-                或自組服務器
-                源代碼  http://bit.ly/HKTRPG_GITHUB`;
+                支援及解鎖上限 https://www.patreon.com/HKTRPG`;
                 return rply;
             }
 
@@ -405,7 +403,7 @@ var rollDiceCommand = async function ({
                     groupID: userid
                 }, {
                     lastActiveAt: new Date()
-                }, opt);
+                }, opt).catch(error => console.error('export #408 mongoDB error: ', error.name, error.reson));
             } else {
                 checkGP.lastActiveAt = theTime;
                 await checkGP.save();
@@ -425,7 +423,7 @@ var rollDiceCommand = async function ({
                 }, {
                     lastActiveAt: new Date(),
                     times: 1
-                }, opt);
+                }, opt).catch(error => console.error('export #428 mongoDB error: ', error.name, error.reson));
             } else {
                 if (userRemainingTime && userRemainingTime > 0) {
                     update = {
@@ -443,7 +441,7 @@ var rollDiceCommand = async function ({
                 if (update)
                     await schema.exportUser.updateOne({
                         userID: userid
-                    }, update, opt);
+                    }, update, opt).catch(error => console.error('export #446 mongoDB error: ', error.name, error.reson));
             }
             totalSize = M.totalSize;
             M = M.sum_messages;
@@ -485,6 +483,7 @@ var rollDiceCommand = async function ({
             rply.discordExport = channelid + '_' + hour + minutes + seconds;
             rply.text += `已私訊你 頻道  ${discordMessage.channel.name}  的聊天紀錄
             你的channel聊天紀錄 共有  ${totalSize}  項`
+            console.log('EXPORT TXT DONE')
             return rply;
         } default:
             break;

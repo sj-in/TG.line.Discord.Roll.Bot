@@ -2,36 +2,35 @@
 var rollbase = require('./rollbase.js');
 var variables = {};
 
-var gameName = function () {
+const gameName = function () {
 	return '【WOD黑暗世界】.xWDy'
 }
 
-var gameType = function () {
+const gameType = function () {
 	return 'Dice:WOD:hktrpg'
 }
-var prefixs = function () {
+const prefixs = function () {
 	return [{
 		first: /^[.](\d+)(wd)(\d|)((\+|-)(\d+)|)$/i,
 		second: null
 	}]
 }
-var getHelpMessage = async function () {
+const getHelpMessage = async function () {
 	return `【WOD 黑暗世界擲骰】
 [.](骰數)Wd(加骰)(+成功數) (問題)
 例子 .3wd8 .15wd9+2`
 }
-var initialize = function () {
+const initialize = function () {
 	return variables;
 }
 
-var rollDiceCommand = async function ({ mainMsg }) {
+const rollDiceCommand = async function ({ mainMsg }) {
 	let rply = {
 		default: 'on',
 		type: 'text',
 		text: ''
 	};
 	let matchwod = /^[.](\d+)(wd|wod)(\d|)((\+|-)(\d+)|)$/i.exec(mainMsg[0]); //判斷式  [0]3wd8+10,[1]3,[2]wd,[3]8,[4]+10,[5]+,[6]10  
-	//console.log(matchwod)
 	if (matchwod && matchwod[1] >= 1 && matchwod[1] <= 600)
 		rply.text = await wod(mainMsg[0], mainMsg[1]);
 	return rply;
@@ -89,7 +88,6 @@ async function wod(triggermsg, text) {
 	}
 	returnStr = returnStr.replace(/[,][ ]$/, '] → ' + varsu + '成功');
 	if (text != null) {
-		//console.log(returnStr)
 		returnStr += ' ; ' + text;
 	}
 	return returnStr;

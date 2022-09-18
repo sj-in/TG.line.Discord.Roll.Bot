@@ -6,7 +6,7 @@ if (!process.env.LINE_CHANNEL_ACCESSTOKEN || !process.env.mongoURL) {
 const {
     RateLimiterMemory
 } = require('rate-limiter-flexible');
-const msgSplitor = (/\S+/ig)
+const MESSAGE_SPLITOR = (/\S+/ig)
 const schema = require('./schema.js');
 const privateKey = (process.env.KEY_PRIKEY) ? process.env.KEY_PRIKEY : null;
 const certificate = (process.env.KEY_CERT) ? process.env.KEY_CERT : null;
@@ -88,7 +88,7 @@ www.get('/api', async (req, res) => {
         null;
     if (ip && await limitRaterApi(ip)) return;
     let rplyVal = {}
-    var mainMsg = req.query.msg.match(msgSplitor); // 定義輸入字串
+    var mainMsg = req.query.msg.match(MESSAGE_SPLITOR); // 定義輸入字串
     if (mainMsg && mainMsg[0])
         var trigger = mainMsg[0].toString().toLowerCase(); // 指定啟動詞在第一個詞&把大階強制轉成細階
 
@@ -109,7 +109,7 @@ www.get('/api', async (req, res) => {
         }
     }
 
-    if (!rplyVal || !rplyVal.text) rplyVal.text = null;
+    if (!rplyVal || !rplyVal.text) rplyVal.text = '';
     res.writeHead(200, { 'Content-type': 'application/json' })
     res.end(`{"message":"${jsonEscape(rplyVal.text)}"}`)
     return;
@@ -141,12 +141,12 @@ io.on('connection', async (socket) => {
             userName: message.userName,
             password: SHA(message.userPassword)
         }
-        let doc = await schema.accountPW.findOne(filter);
+        let doc = await schema.accountPW.findOne(filter).catch(error => console.error('www #144 mongoDB error: ', error.name, error.reson));
         let temp;
         if (doc && doc.id) {
             temp = await schema.characterCard.find({
                 id: doc.id
-            });
+            }).catch(error => console.error('www #149 mongoDB error: ', error.name, error.reson));
         }
         let id = [];
         if (doc && doc.channel) {
@@ -165,9 +165,14 @@ io.on('connection', async (socket) => {
             public: true
         }
         let temp = await schema.characterCard.find(filter);
-        socket.emit('getPublicListInfo', {
-            temp
-        })
+        try {
+            socket.emit('getPublicListInfo', {
+                temp
+            })
+        } catch (error) {
+            console.error('www #170 mongoDB error: ', error.name, error.reson)
+        }
+
     })
 
     socket.on('publicRolling', async message => {
@@ -211,13 +216,13 @@ io.on('connection', async (socket) => {
                     "channel.id": message.rollTarget.id,
                     "channel.botname": message.rollTarget.botname
                 }
-                let result = await schema.accountPW.findOne(filter);
+                let result = await schema.accountPW.findOne(filter).catch(error => console.error('www #214 mongoDB error: ', error.name, error.reson));
                 if (!result) return;
                 let filter2 = {
                     "botname": message.rollTarget.botname,
                     "id": message.rollTarget.id
                 }
-                let allowRollingResult = await schema.allowRolling.findOne(filter2);
+                let allowRollingResult = await schema.allowRolling.findOne(filter2).catch(error => console.error('www #220 mongoDB error: ', error.name, error.reson));
                 if (!allowRollingResult) return;
                 rplyVal.text = '@' + message.cardName + ' - ' + message.item + '\n' + rplyVal.text;
                 if (message.rollTarget.botname) {
@@ -243,7 +248,7 @@ io.on('connection', async (socket) => {
             userName: message.userName,
             password: SHA(message.userPassword)
         }
-        let doc = await schema.accountPW.findOne(filter);
+        let doc = await schema.accountPW.findOne(filter).catch(error => console.error('www #246 mongoDB error: ', error.name, error.reson));
         let temp;
         if (doc && doc.id) {
             message.card.state = checkNullItem(message.card.state);
@@ -259,7 +264,7 @@ io.on('connection', async (socket) => {
                     roll: message.card.roll,
                     notes: message.card.notes,
                 }
-            });
+            }).catch(error => console.error('www #262 mongoDB error: ', error.name, error.reson));
         }
         if (temp) {
             socket.emit('updateCard', true)
@@ -323,7 +328,7 @@ records.on("new_message", async (message) => {
 
     io.emit(message.roomNumber, message);
     let rplyVal = {}
-    var mainMsg = message.msg.match(msgSplitor); // 定義輸入字串
+    var mainMsg = message.msg.match(MESSAGE_SPLITOR); // 定義輸入字串
     if (mainMsg && mainMsg[0])
         var trigger = mainMsg[0].toString().toLowerCase(); // 指定啟動詞在第一個詞&把大階強制轉成細階
 

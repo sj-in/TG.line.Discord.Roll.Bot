@@ -19,13 +19,18 @@ const agenda = new Agenda({ db: { address: process.env.mongoURL, collection: 'ag
 
 (async function () {
     // IIFE to give access to async/await
-    await agenda.start();
+    try {
+        await agenda.start()
+    } catch (error) {
+        console.error(`agenda start error #25`, error)
+    }
+
 
 })();
 
 
 agenda.on("fail", (err, job) => {
-    console.log(`Job failed with error: ${err.message}`);
+    console.error(`#33 Job failed with error: ${err.message}`);
 });
 /**
  * 對schedule 中發佈的文字進行處理

@@ -3,30 +3,31 @@ if (!process.env.mongoURL) {
     return;
 }
 const VIP = require('../modules/veryImportantPerson');
-const limitAtArr = [5, 25, 50, 200, 200, 200, 200, 200];
+const FUNCTION_AT_LIMIT = [5, 25, 50, 200, 200, 200, 200, 200];
 const schema = require('../modules/schema')
-const limitCronArr = [2, 15, 30, 45, 99, 99, 99, 99];
+const FUNCTION_CRON_LIMIT = [2, 15, 30, 45, 99, 99, 99, 99];
 const moment = require('moment');
 const agenda = require('../modules/schedule')
-const cronRegex = /^(\d\d)(\d\d)((?:-([1-9]?[1-9]|((mon|tues|wed(nes)?|thur(s)?|fri|sat(ur)?|sun)(day)?))){0,1})/i;
-const validDays = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+const CRON_REGEX = /^(\d\d)(\d\d)((?:-([1-9]?[1-9]|((mon|tues|wed(nes)?|thur(s)?|fri|sat(ur)?|sun)(day)?))){0,1})/i;
+const VALID_DAYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+const checkTools = require('../modules/check.js');
 
-1
 
-var gameName = function () {
+
+const gameName = function () {
     return '【定時發訊功能】.at /.cron  mins hours delete show'
 }
 
-var gameType = function () {
+const gameType = function () {
     return 'funny:schedule:hktrpg'
 }
-var prefixs = function () {
+const prefixs = function () {
     return [{
         first: /^\.at$|^\.cron$/i,
         second: null
     }]
 }
-var getHelpMessage = function () {
+const getHelpMessage = function () {
     return `【定時任務功能】
     兩種模式
     【at】  指定一個時間
@@ -63,13 +64,24 @@ var getHelpMessage = function () {
 
     .cron / .at delete (序號) 可以刪除指定的定時訊息
     如 .at delete 1   請使用.at show 查詢序號
+
+    patreoner 限定功能
+    自定發訊者名字和圖片(需要Webhook權限)
+    
+    範例
+    .cron 2258 
+    name=Sad
+    link=https://user-images.githubusercontent.com/23254376/113255717-bd47a300-92fa-11eb-90f2-7ebd00cd372f.png
+    wwwww
+    [[2d3]]
+    hello world
     `
 }
-var initialize = function () {
+const initialize = function () {
     return "";
 }
 
-var rollDiceCommand = async function ({
+const rollDiceCommand = async function ({
     inputStr,
     mainMsg,
     groupid,
@@ -87,7 +99,7 @@ var rollDiceCommand = async function ({
         text: ''
     };
     if (!differentPeformAt(botname)) {
-        rply.text = '此功能只能在Discord, Line, Telegram中使用'
+        rply.text = '此功能只能在Discord, Telegram中使用'
         return rply
     }
     switch (true) {
@@ -114,7 +126,7 @@ var rollDiceCommand = async function ({
             }
             const jobs = await agenda.agenda.jobs(
                 check
-            );
+            ).catch(error => console.error('agenda error: ', error.name, error.reson))
             rply.text = showJobs(jobs);
             return rply;
         }
@@ -140,7 +152,7 @@ var rollDiceCommand = async function ({
             }
             const jobs = await agenda.agenda.jobs(
                 check
-            );
+            ).catch(error => console.error('agenda error: ', error.name, error.reson))
             try {
                 let data = jobs[Number(mainMsg[2]) - 1];
                 await jobs[Number(mainMsg[2]) - 1].remove();
@@ -161,18 +173,20 @@ var rollDiceCommand = async function ({
             let lv = await VIP.viplevelCheckUser(userid);
             let gpLv = await VIP.viplevelCheckGroup(groupid);
             lv = (gpLv > lv) ? gpLv : lv;
-            let limit = limitAtArr[lv];
+            let limit = FUNCTION_AT_LIMIT[lv];
             let check = {
                 name: differentPeformAt(botname),
                 "data.groupid": groupid
             }
             let checkGroupid = await schema.agendaAtHKTRPG.countDocuments(
                 check
-            );
+            ).catch(error => console.error('schedule  #171 mongoDB error: ', error.name, error.reson));
             if (checkGroupid >= limit) {
-                rply.text = '.at 整個群組上限' + limit + '個\n支援及解鎖上限 https://www.patreon.com/HKTRPG\n或自組服務器\n源代碼  http://bit.ly/HKTRPG_GITHUB';
+                rply.text = '.at 整個群組上限' + limit + '個\n支援及解鎖上限 https://www.patreon.com/HKTRPG\n';
                 return rply;
             }
+            let roleName = getAndRemoveRoleNameAndLink(inputStr);
+            inputStr = roleName.newText;
 
             let checkTime = checkAtTime(mainMsg[1], mainMsg[2]);
             if (!checkTime || checkTime.time == "Invalid Date") {
@@ -181,21 +195,37 @@ var rollDiceCommand = async function ({
             }
             let text = (checkTime.threeColum) ? inputStr.replace(/^\s?\S+\s+\S+\s+\S+\s+/, '') : inputStr.replace(/^\s?\S+\s+\S+\s+/, '');
             let date = checkTime.time;
+            if (roleName.roleName || roleName.imageLink) {
+                if (lv === 0) {
+                    rply.text = `.at裡的角色發言功能只供Patreoner使用，請支持伺服器運作，或自建Server\nhttps://www.patreon.com/HKTRPG`;
+                    return rply;
+                }
+                if (!roleName.roleName || !roleName.imageLink) {
+                    rply.text = `請完整設定名字和圖片網址
+                    格式為
+                    .at 時間
+                    name=名字
+                    link=www.sample.com/sample.jpg
+                    XXXXXX信息一堆`;
+                    return rply;
+                }
+
+            }
 
             let callBotname = differentPeformAt(botname);
-            await agenda.agenda.schedule(date, callBotname, { replyText: text, channelid: channelid, quotes: true, groupid: groupid, botname: botname, userid: userid });
+            await agenda.agenda.schedule(date, callBotname, { imageLink: roleName.imageLink, roleName: roleName.roleName, replyText: text, channelid: channelid, quotes: true, groupid: groupid, botname: botname, userid: userid }).catch(error => console.error('agenda error: ', error.name, error.reson))
             rply.text = `已新增排定內容\n將於${date.toString().replace(/:\d+\s.*/, '')}運行`
             return rply;
         }
         case /^\.cron+$/i.test(mainMsg[0]) && /^show$/i.test(mainMsg[1]): {
-            if (!groupid) {
-                rply.text = '此功能必須在群組中使用'
-                return rply
+            if (rply.text = checkTools.permissionErrMsg({
+                flag : checkTools.flag.ChkChannelManager,
+                gid : groupid,
+                role : userrole
+            })) {
+                return rply;
             }
-            if (userrole <= 1) {
-                rply.text = '只有GM以上才可新增'
-                return rply
-            }
+
             let check = {}
             if (botname == "Discord") {
                 check = {
@@ -209,19 +239,19 @@ var rollDiceCommand = async function ({
             }
             const jobs = await agenda.agenda.jobs(
                 check
-            );
+            ).catch(error => console.error('agenda error: ', error.name, error.reson))
             rply.text = showCronJobs(jobs);
             return rply;
         }
         case /^\.cron$/i.test(mainMsg[0]) && /^delete$/i.test(mainMsg[1]): {
-            if (!groupid) {
-                rply.text = '此功能必須在群組中使用'
-                return rply
+            if (rply.text = checkTools.permissionErrMsg({
+                flag : checkTools.flag.ChkChannelManager,
+                gid : groupid,
+                role : userrole
+            })) {
+                return rply;
             }
-            if (userrole <= 1) {
-                rply.text = '只有GM以上才可新增'
-                return rply
-            }
+
             if (!mainMsg[2] || !/\d+/i.test(mainMsg[2])) {
                 rply.text = '移除定時訊息指令為 .cron delete (序號) \n 如 .cron delete 1'
                 return rply
@@ -239,7 +269,7 @@ var rollDiceCommand = async function ({
             }
             const jobs = await agenda.agenda.jobs(
                 check
-            );
+            )
             try {
                 let data = jobs[Number(mainMsg[2]) - 1];
                 await jobs[Number(mainMsg[2]) - 1].remove();
@@ -253,48 +283,69 @@ var rollDiceCommand = async function ({
             return rply;
         }
         case /^\.cron+$/i.test(mainMsg[0]): {
-            if (!groupid) {
-                rply.text = '此功能必須在群組中使用'
-                return rply
-            }
-            if (userrole <= 1) {
-                rply.text = '只有GM以上才可新增'
-                return rply
-            }
-            if (!mainMsg[2]) {
-                rply.text = '未有內容'
-                return rply
-            }
+            rply.text = checkTools.permissionErrMsg({
+                flag : checkTools.flag.ChkChannelManager,
+                gid : groupid,
+                role : userrole
+            });
+            if (!mainMsg[2]) rply.text += '未有內容'
+            if (rply.text) return rply;
+
             let lv = await VIP.viplevelCheckUser(userid);
             let gpLv = await VIP.viplevelCheckGroup(groupid);
             lv = (gpLv > lv) ? gpLv : lv;
-            let limit = limitCronArr[lv];
+            let limit = FUNCTION_CRON_LIMIT[lv];
             let check = {
                 name: differentPeformCron(botname),
                 "data.groupid": groupid
             }
             let checkGroupid = await schema.agendaAtHKTRPG.countDocuments(
                 check
-            );
+            ).catch(error => console.error('schedule #278 mongoDB error: ', error.name, error.reson));
             if (checkGroupid >= limit) {
-                rply.text = '.cron 整個群組上限' + limit + '個\n支援及解鎖上限 https://www.patreon.com/HKTRPG\n或自組服務器\n源代碼  http://bit.ly/HKTRPG_GITHUB';
+                rply.text = '.cron 整個群組上限' + limit + '個\n支援及解鎖上限 https://www.patreon.com/HKTRPG\n';
                 return rply;
             }
+            let roleName = getAndRemoveRoleNameAndLink(inputStr);
+            inputStr = roleName.newText;
 
             let checkTime = checkCronTime(mainMsg[1]);
             if (!checkTime || !checkTime.min || !checkTime.hour) {
                 rply.text = `輸入出錯\n ${this.getHelpMessage()}`;
                 return rply;
             }
+            if (roleName.roleName || roleName.imageLink) {
+                if (lv === 0) {
+                    rply.text = `.cron裡的角色發言功能只供Patreoner使用，請支持伺服器運作，或自建Server\nhttps://www.patreon.com/HKTRPG`;
+                    return rply;
+                }
+                if (!roleName.roleName || !roleName.imageLink) {
+                    rply.text = `請完整設定名字和圖片網址
+                    格式為
+                    .cron 時間
+                    name=名字
+                    link=www.sample.com/sample.jpg
+                    XXXXXX信息一堆`;
+                    return rply;
+                }
+
+            }
+
+
             let text = inputStr.replace(/^\s?\S+\s+\S+\s+/, '');
             // "0 6 * * *"
             let date = `${checkTime.min} ${checkTime.hour} *${checkTime.days ? `/${checkTime.days}` : ''} * ${(checkTime.weeks.length) ? checkTime.weeks : '*'}`;
-            //  console.log('date', date)
 
             let callBotname = differentPeformCron(botname);
-            const job = agenda.agenda.create(callBotname, { replyText: text, channelid: channelid, quotes: true, groupid: groupid, botname: botname, userid: userid, createAt: new Date(Date.now()) });
+            const job = agenda.agenda.create(callBotname, { imageLink: roleName.imageLink, roleName: roleName.roleName, replyText: text, channelid: channelid, quotes: true, groupid: groupid, botname: botname, userid: userid, createAt: new Date(Date.now()) });
             job.repeatEvery(date);
-            await job.save();
+
+            try {
+                await job.save();
+            } catch (error) {
+                console.error("schedule #301 Error saving job to collection");
+            }
+
             rply.text = `已新增排定內容\n將於${checkTime.days ? `每隔${checkTime.days}天` : ''}  ${checkTime.weeks.length ? `每個星期的${checkTime.weeks}` : ''}${!checkTime.weeks && !checkTime.days ? `每天` : ''} ${checkTime.hour}:${checkTime.min} (24小時制)運行`
             return rply;
         }
@@ -311,12 +362,17 @@ function differentPeformAt(botname) {
         case "Telegram":
             return "scheduleAtMessageTelegram"
 
-        case "Line":
-            return "scheduleAtMessageLine"
+        // case "Line":
+        //      return "scheduleAtMessageLine"
 
         default:
             break;
     }
+}
+function getAndRemoveRoleNameAndLink(input) {
+    let roleName = input.match(/^name=(.*)\n/mi) ? input.match(/^name=(.*)\n/mi)[1] : null;
+    let imageLink = input.match(/^link=(.*)\n/mi) ? input.match(/^link=(.*)\n/mi)[1] : null;
+    return { newText: input.replace(/^link=.*\n/mi, "").replace(/^name=.*\n/im, ""), roleName, imageLink };
 }
 
 function differentPeformCron(botname) {
@@ -375,10 +431,10 @@ function checkAtTime(first, second) {
 function checkCronTime(text) {
     //const date = {hour: 14, minute: 30}
     //@{text} - 1133  / 1155-wed / 1125-(1-99)
-    let hour = text.match(cronRegex) && text.match(cronRegex)[1];
-    let min = text.match(cronRegex) && text.match(cronRegex)[2];
-    let days = text.match(cronRegex) && !text.match(cronRegex)[6] && text.match(cronRegex)[4] || null;
-    //let weeks = text.match(cronRegex) && text.match(cronRegex)[6] || null;
+    let hour = text.match(CRON_REGEX) && text.match(CRON_REGEX)[1];
+    let min = text.match(CRON_REGEX) && text.match(CRON_REGEX)[2];
+    let days = text.match(CRON_REGEX) && !text.match(CRON_REGEX)[6] && text.match(CRON_REGEX)[4] || null;
+    //let weeks = text.match(CRON_REGEX) && text.match(CRON_REGEX)[6] || null;
     let weeks = []
     if (hour == 24) {
         hour = "00";
@@ -386,8 +442,8 @@ function checkCronTime(text) {
     if (min == 60) {
         min = "00";
     }
-    for (let index = 0; index < validDays.length; index++) {
-        text.toLowerCase().indexOf(validDays[index]) >= 0 ? weeks.push(index) : null
+    for (let index = 0; index < VALID_DAYS.length; index++) {
+        text.toLowerCase().indexOf(VALID_DAYS[index]) >= 0 ? weeks.push(index) : null
 
     }
 
